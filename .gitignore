@@ -1,0 +1,11 @@
+# Source data and generated deliverables stay local.
+*.xlsx
+*.pptx
+outputs/
+.catalog-build/
+.catalog-work/
+
+# Local runtime and Python cache.
+catalog_tool/node_modules/
+**/__pycache__/
+*.pyc
