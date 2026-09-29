@@ -13,9 +13,11 @@
 - [x] Extend local HTTP controls and add accessible share dialog with local DOM updates, copy fallback, progress and plain-language failures. Keep selections responsive and unchanged.
 - [x] Verify real desktop/mobile UI, external read-only viewing with synthetic products, stop/expiry, existing selection regressions and subprocess cleanup. Independent ordinary-speed GPT-6 Sol review if useful.
 - [x] Update pool/deployment guides and Windows bundle support.
-- [ ] Run public audit, sync code and refresh the Windows Release.
+- [x] Run public audit, sync code and refresh the Windows Release.
 
 Review found that sealing a selection ended a still-valid share. A regression test reproduced it; the owner service now retains the independent share lifetime after sealing, while explicit session close still revokes it. Real Edge checks covered desktop 1280×900 and mobile 390×844, approved image loading, clipboard, anonymous read-only viewing, rejected writes, preserved choices, stable card DOM, revocation and no console/page errors. Tests use synthetic data only; recipient network availability is not universally verified.
+
+Release acceptance: 12 shared and 57 catalog tests passed; public source/history audit passed. The v0.2.0 ZIP was installed into empty directories, its packaged cloudflared passed the locked checksum and executed, and the installed Python completed PDF import and one-slide PPT export. GitHub reports one ZIP asset, and an unauthenticated download matched SHA-256 `5b7b6f0fe03620aa89f5643dfeea0a983a316e8aebee4abde06c79bb1f7c5a5e`. The real local selection page was reopened with its existing choices and sharing idle; no real product data was published by acceptance checks.
 
 ## Review focus
 
