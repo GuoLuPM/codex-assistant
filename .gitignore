@@ -26,6 +26,7 @@ node_modules/
 *.sqlite*
 *.db
 *.local.json
+*.local.json.tmp
 .env
 .env.*
 *.pem

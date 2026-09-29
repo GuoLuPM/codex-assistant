@@ -6,12 +6,14 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from windows_bundle import safe_path, verify_bundle
 from install_windows import check_destination, install_tree
+from configure_windows import configure
 
 
 class BundleTests(unittest.TestCase):
@@ -53,6 +55,45 @@ class BundleTests(unittest.TestCase):
         other = self.root / 'other'; other.mkdir(); (other / 'user.txt').write_text('keep')
         with self.assertRaisesRegex(ValueError, 'marker'): install_tree(self.bundle, other, self.manifest, 'application')
         self.assertEqual((other / 'user.txt').read_text(), 'keep')
+
+    def test_configuration_preserves_saved_paths_and_rejects_broken_components(self):
+        project = self.bundle / 'application'
+        runtime, skill = self.root / 'custom runtime', self.root / 'custom skill'
+        for target in (runtime / 'python/python.exe', runtime / 'node/bin/node.exe',
+                       runtime / 'node/node_modules/@oai/artifact-tool/package.json', skill / 'container_tools/artifact_tool_utils.mjs'):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(b'not an executable')
+        config = {'version': 1, 'python': sys.executable, 'runtime_root': str(runtime), 'presentations_skill': str(skill), 'user_setting': 'keep'}
+        path = project / 'environment.local.json'
+        path.write_text(json.dumps(config), encoding='utf-8')
+        environment = {key: value for key, value in os.environ.items() if not key.startswith('ASSISTANT_')}
+        with patch.dict(os.environ, environment, clear=True):
+            with patch('configure_windows.probe_ppt') as probe:
+                result = configure(project)
+                self.assertTrue(result['ppt_ready'])
+                self.assertFalse(result['ppt_verified'])
+                self.assertEqual(json.loads(path.read_text(encoding='utf-8')), config)
+                probe.assert_called_once_with(runtime.resolve(), skill.resolve())
+            previous = path.read_bytes()
+            # File names alone cannot pass readiness: these are real invalid
+            # executable fixtures, not a mocked successful component probe.
+            with self.assertRaisesRegex(ValueError, 'component probe failed'):
+                configure(project)
+            self.assertEqual(path.read_bytes(), previous)
+            with self.assertRaisesRegex(ValueError, 'unusable'):
+                configure(project, runtime_root=self.root / 'missing')
+            self.assertEqual(path.read_bytes(), previous)
+
+    def test_absent_codex_components_leave_an_explicit_partial_configuration(self):
+        project = self.bundle / 'application'
+        environment = {key: value for key, value in os.environ.items() if not key.startswith('ASSISTANT_')}
+        environment['USERPROFILE'] = str(self.root / 'new user')
+        with patch.dict(os.environ, environment, clear=True):
+            result = configure(project, sys.executable)
+        self.assertTrue(result['base_ready'])
+        self.assertFalse(result['ppt_ready'])
+        self.assertTrue(result['ppt_missing'])
+        self.assertEqual(json.loads((project / 'environment.local.json').read_text(encoding='utf-8')), {'version': 1, 'python': str(Path(sys.executable).resolve())})
 
     @unittest.skipUnless(os.name == 'nt', 'PowerShell launcher integration')
     def test_launcher_uses_local_config_from_another_working_directory(self):

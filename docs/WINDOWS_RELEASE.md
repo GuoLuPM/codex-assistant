@@ -23,11 +23,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Setup.ps1 -Proxy http://12
 
 无需代理就省略 `-Proxy`。可用 `-ProjectDir` / `-RuntimeDir` 指定其他**空目录**。没有 D 盘时先说明实际盘符，再选择有空间的位置。`ExecutionPolicy Bypass` 仅用于这一进程，不永久更改执行策略。
 
-安装器验证每个载荷哈希。相同版本重复执行可继续补齐 PDF/PPT 配置；已有数据保留。无安装标记、版本不同或公共代码被修改时停止，不能覆盖旧工程。升级请先核对改动，或安装到新空目录后按迁移文档移动完整私有池。
+安装器验证每个载荷哈希。相同版本重复执行可继续补齐 PDF/PPT 配置；已有数据及保存的本机路径保留，只有显式传入的新路径才替换对应配置。已有配置不可用时报告问题并保留原文件。无安装标记、版本不同或公共代码被修改时停止，不能覆盖旧工程。升级请先核对改动，或安装到新空目录后按迁移文档移动完整私有池。
 
 ## 2. 对接这台电脑的 Codex PPT 组件
 
-读安装结果：`base_ready` 只代表 Python/FTS5；`pdf_ready` / `ppt_ready` 分别表示依赖已就位，**不等于实际导出已验收**。
+读安装结果：`base_ready` 只代表 Python/FTS5；`pdf_ready` 表示 PDF 依赖已安装；`ppt_ready` 表示本机 Python、Node、PPT 组件实际加载探测通过，**不等于实际导出已验收**。配置阶段始终返回 `ppt_verified=false`，实际导出由下一步检查确认。
 
 `ppt_ready=false` 时由 Codex 执行：
 

@@ -34,7 +34,9 @@ def check(ppt=False, require_pdf=False):
         pool = Pool(work / 'pool')
         try:
             pool.add(source)
-            if pool.add(source)['status'] != 'duplicate': raise ValueError('Duplicate-file check failed')
+            renamed = work / 'renamed.xlsx'
+            shutil.copyfile(source, renamed)
+            if pool.add(renamed)['status'] != 'duplicate': raise ValueError('Duplicate-file check failed')
             items = pool.search(query='保温杯', price_field='retail_price', maximum=100)['items']
             if len(items) != 1 or items[0]['price']['value'] != 88: raise ValueError('Source price/search mismatch')
             choices = Selections(pool)

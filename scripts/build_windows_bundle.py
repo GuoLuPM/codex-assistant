@@ -1,5 +1,6 @@
 """Build one Windows x64 ZIP from committed code and pinned official downloads."""
 import argparse
+import csv
 import io
 import json
 import shutil
@@ -79,11 +80,24 @@ def build(tag, output, cache, proxy=None):
             '    sys.path.insert(0, os.path.dirname(os.path.abspath(script)))\n', encoding='utf-8')
         subprocess.run([str(python_root / 'python.exe'), '-B', '-m', 'pip', 'install', '--no-index', '--no-deps', '--no-compile', '--disable-pip-version-check',
                         *[str(p) for p in wheels if p != pip_wheel]], check=True, stdout=subprocess.DEVNULL)
+        # This app invokes modules through Python, not auxiliary wheel scripts.
+        # pip gives those scripts absolute build-machine interpreter paths.
+        scripts = python_root / 'Scripts'
+        if scripts.exists():
+            for path in scripts.iterdir():
+                if not path.is_file() or path.is_symlink(): raise ValueError('Unexpected wheel script entry')
+                path.unlink()
+            scripts.rmdir()
         for info in packages.glob('*.dist-info'):
             # pip records build-machine paths for direct wheel inputs. They are
             # not runtime requirements; retain upstream metadata and licenses.
             for name in ('direct_url.json', 'REQUESTED'):
                 (info / name).unlink(missing_ok=True)
+            record = info / 'RECORD'
+            if record.exists():
+                rows = list(csv.reader(io.StringIO(record.read_text(encoding='utf-8'))))
+                with record.open('w', encoding='utf-8', newline='') as stream:
+                    csv.writer(stream, lineterminator='\n').writerows(row for row in rows if (packages / row[0]).is_file())
         shutil.copyfile(application / 'packaging/Setup.ps1', root / 'Setup.ps1')
         shutil.copyfile(application / 'docs/WINDOWS_RELEASE.md', root / 'START-HERE.md')
         manifest = {'version': 1, 'platform': 'windows-x64', 'tag': tag, 'commit': commit,

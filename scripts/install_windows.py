@@ -74,13 +74,15 @@ def install(bundle, project, runtime, proxy=None, runtime_root=None, skill_dir=N
         request = runtime / 'pdf-install.local.txt'
         request.write_text(f"{lock['url']} --hash=sha256:{lock['sha256']}\n", encoding='utf-8')
         command = [str(python), '-B', '-m', 'pip', '--isolated', 'install', '--no-deps', '--only-binary=:all:', '--require-hashes',
-                   '--disable-pip-version-check', '--no-compile', '--cache-dir', str(runtime / 'cache'), '-r', str(request)]
+                   '--disable-pip-version-check', '--no-warn-script-location', '--no-compile', '--cache-dir', str(runtime / 'cache'), '-r', str(request)]
         if proxy: command.extend(['--proxy', proxy])
         try:
             subprocess.run(command, check=True, env=environment, stdout=subprocess.DEVNULL)
             pdf_ready = True
         finally: request.unlink(missing_ok=True)
-    result = configure(project, python, runtime_root, skill_dir)
+    # The bundled Python is the first-install default. A retry must not replace
+    # the recipient's saved interpreter or PPT paths with discovery defaults.
+    result = configure(project, None if (project / 'environment.local.json').exists() else python, runtime_root, skill_dir)
     result.update(installation=states, tag=manifest['tag'], commit=manifest['commit'], pdf_ready=pdf_ready)
     result['status'] = 'configured' if result['ppt_ready'] and pdf_ready else 'partial'
     return result
