@@ -137,9 +137,17 @@ def main(argv=None):
     facets.add_argument("--offset", type=int, default=0)
     remove = commands.add_parser("remove-source", help="Unregister one source; never deletes its workbook")
     remove.add_argument("path")
+    relocate = commands.add_parser("relocate", help="Validate moved sources/maps; use --apply to update registrations atomically")
+    relocate.add_argument("--from", type=Path, dest="old_root", required=True)
+    relocate.add_argument("--to", type=Path, dest="new_root", default=ROOT)
+    relocate.add_argument("--apply", action="store_true")
+    from present import add_parser, run as present
+    add_parser(commands)
     args = parser.parse_args(argv)
     store = None
     try:
+        if args.command == "ppt":
+            return present(args)
         if args.command == "inspect":
             from inspect_source import inspect_source
             result = inspect_source(args.source, args.sheet, args.cell_range, args.limit, args.offset, args.max_cells, args.max_chars)
@@ -178,6 +186,8 @@ def main(argv=None):
             result = store.sources(args.limit, args.offset)
         elif args.command == "facets":
             result = store.facets(args.field, args.query, args.limit, args.offset)
+        elif args.command == "relocate":
+            result = store.relocate(args.old_root, args.new_root, args.apply)
         else:
             store.remove_source(args.path)
             result = {"removed": Path(args.path).name}

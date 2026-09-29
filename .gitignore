@@ -17,7 +17,7 @@ data/
 .catalog-work/
 
 # Local runtime and Python cache.
-catalog_tool/node_modules/
+node_modules/
 **/__pycache__/
 *.pyc
 .catalog-index/

@@ -1,6 +1,6 @@
 # 来源映射：观察一次，增量复用
 
-本文件是 AGENTS.md 的延伸约束。新增格式、表头歧义、数据覆盖提示或映射变化时读取。坐标映射属于私有数据，存入 `.catalog-index/maps/*.local.json`；源 XLSX 不改写，也不另外生成标准化工作簿。
+本文件是 [catalog 流程](../catalog_tool/WORKFLOW.md) 经根 AGENTS.md 绑定的延伸约束。新增格式、表头歧义、数据覆盖提示或映射变化时读取。坐标映射属于私有数据，存入 `.catalog-index/maps/*.local.json`；源 XLSX 不改写，也不另外生成标准化工作簿。
 
 ## 1. 先观察，后确定语义
 

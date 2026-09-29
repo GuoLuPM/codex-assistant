@@ -163,12 +163,8 @@ class Catalog:
                     items, skipped = read_products(source, self.root / "assets", schema)
                 except ValueError as error:
                     raise ValueError(f"{source.name}: {error}") from error
-                self.db.execute("DELETE FROM products_fts WHERE rowid IN (SELECT pk FROM products WHERE source_path=?)", (str(source),))
-                self.db.execute("DELETE FROM sources WHERE path=?", (str(source),))
-                self.db.execute("INSERT INTO sources VALUES (?,?,?,?,?,?,?)", (
-                    str(source), items[0]["source_hash"], stat.st_size, stat.st_mtime_ns, signature, time.time(), saved_map))
+                self._save_source(source, stat, signature, saved_map, items)
                 for item in items:
-                    self._insert(self._decorate(item))
                     for kind, absent in (("prices", all(p["value"] is None for p in item["prices"].values())), ("details", not item["features"]),
                                          ("images", not item["product_image"] and not item["package_image"])):
                         missing[kind] += int(absent)
@@ -186,6 +182,69 @@ class Catalog:
             result["unmapped_headers"] = [{"source": key[0], "sheet": key[1], "fields": sorted(value)}
                                           for key, value in list(unmapped.items())[:10]]
         return result
+
+    def _delete_source(self, source):
+        self.db.execute("DELETE FROM products_fts WHERE rowid IN (SELECT pk FROM products WHERE source_path=?)", (str(source),))
+        self.db.execute("DELETE FROM sources WHERE path=?", (str(source),))
+
+    def _save_source(self, source, stat, signature, mapping_path, items):
+        """Caller owns the transaction, including the FTS rows."""
+        self._delete_source(source)
+        self.db.execute("INSERT INTO sources VALUES (?,?,?,?,?,?,?)", (
+            str(source), items[0]["source_hash"], stat.st_size, stat.st_mtime_ns, signature, time.time(), mapping_path))
+        for item in items:
+            self._insert(self._decorate(item))
+
+    def relocate(self, old_root, new_root, apply=False):
+        """Re-extract only moved sources; never patch payload strings or move user files."""
+        from extract import read_products
+        old_root, new_root = Path(old_root).resolve(), Path(new_root).resolve()
+        if old_root == new_root or not new_root.is_dir():
+            raise ValueError("Relocation requires distinct roots and an existing destination directory")
+
+        def remap(value):
+            path = Path(value).resolve()
+            if not path.is_relative_to(old_root):
+                return path
+            target = (new_root / path.relative_to(old_root)).resolve()
+            if not target.is_relative_to(new_root):
+                raise ValueError("Relocation target escapes destination root")
+            return target
+
+        plans = []
+        for old in self.db.execute("SELECT * FROM sources ORDER BY path").fetchall():
+            if not Path(old["path"]).is_relative_to(old_root):
+                continue
+            source = remap(old["path"])
+            mapping = remap(old["mapping_path"]) if old["mapping_path"] else None
+            if self.db.execute("SELECT 1 FROM sources WHERE path=?", (str(source),)).fetchone():
+                raise ValueError(f"Destination already registered: {source}; resolve it before relocating")
+            if not source.is_file() or sha(source) != old["hash"]:
+                raise ValueError(f"Relocated source missing or hash changed: {source}")
+            _, signature, saved_map = self._source_schema(source, mapping)
+            if signature != old["config_hash"]:
+                raise ValueError(f"Relocated config or mapping changed: {source.name}; restore it before relocating")
+            plans.append((old, source, saved_map))
+        if not plans:
+            raise ValueError("No registered sources under the old root")
+        products = 0
+        if apply:
+            with self.db:
+                for old, source, mapping in plans:
+                    schema, signature, saved_map = self._source_schema(source, mapping)
+                    if signature != old["config_hash"]:
+                        raise ValueError(f"Relocated config or mapping changed: {source.name}")
+                    stat = source.stat()
+                    items, _ = read_products(source, self.root / "assets", schema)
+                    if items[0]["source_hash"] != old["hash"]:
+                        raise ValueError(f"Relocated source hash changed: {source.name}")
+                    self._delete_source(old["path"])
+                    self._save_source(source, stat, signature, saved_map, items)
+                    products += len(items)
+        return {"applied": apply, "sources": len(plans), "products_read": products,
+                "ids_changed": bool(apply), "more": len(plans) > 10,
+                "items": [{"from": old["path"], "to": str(source), "mapping": mapping}
+                          for old, source, mapping in plans[:10]]}
 
     def _insert(self, item):
         title = normalize(" ".join(str(item.get(key) or "") for key in ("name", "model", "variant")))
@@ -395,5 +454,4 @@ class Catalog:
 
     def remove_source(self, path):
         with self.db:
-            self.db.execute("DELETE FROM products_fts WHERE rowid IN (SELECT pk FROM products WHERE source_path=?)", (str(Path(path).resolve()),))
-            self.db.execute("DELETE FROM sources WHERE path=?", (str(Path(path).resolve()),))
+            self._delete_source(Path(path).resolve())

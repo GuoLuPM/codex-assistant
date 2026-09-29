@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from audit_public import findings, private_path, allowed_email
+from scripts.audit_public import findings, private_path, allowed_email
 
 
 class PublicAuditTests(unittest.TestCase):
@@ -15,6 +15,8 @@ class PublicAuditTests(unittest.TestCase):
 
     def test_blocks_data_files_and_personal_email(self):
         self.assertTrue(private_path("nested/prices.xlsx"))
+        self.assertTrue(private_path("nested/prices.xlsm"))
+        self.assertTrue(private_path("nested/export.csv"))
         self.assertTrue(private_path("catalog.local.json"))
         self.assertTrue(private_path("data/customer-notes.txt"))
         self.assertFalse(private_path("catalog_tool/catalog.py"))

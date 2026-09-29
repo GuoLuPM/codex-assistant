@@ -8,11 +8,14 @@ param(
     [Parameter(ParameterSetName = 'Source')][string]$ImportMap,
     [string]$IndexDir = (Join-Path $PSScriptRoot '..\.catalog-index'),
     [string[]]$PriceFields,
-    [string]$RuntimeRoot = (Join-Path $env:USERPROFILE '.cache\codex-runtimes\codex-primary-runtime\dependencies'),
-    [string]$SkillDir
+    [string]$RuntimeRoot = $env:ASSISTANT_RUNTIME_ROOT,
+    [string]$SkillDir = $env:ASSISTANT_PRESENTATIONS_SKILL
 )
 
 $ErrorActionPreference = 'Stop'
+if (-not $RuntimeRoot) {
+    $RuntimeRoot = Join-Path $env:USERPROFILE '.cache\codex-runtimes\codex-primary-runtime\dependencies'
+}
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if ($InputFile) { $source = (Resolve-Path -LiteralPath $InputFile).Path }
 if (-not $ConfigFile) {
@@ -44,7 +47,13 @@ if (-not (Test-Path -LiteralPath (Join-Path $SkillDir 'container_tools\artifact_
     throw "Invalid presentation skill directory: $SkillDir"
 }
 $moduleLink = Join-Path $PSScriptRoot 'node_modules'
-if (-not (Test-Path -LiteralPath $moduleLink)) {
+$existingModules = Get-Item -LiteralPath $moduleLink -Force -ErrorAction SilentlyContinue
+if ($existingModules) {
+    if (-not ($existingModules.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -or
+        [System.IO.Path]::GetFullPath([string]$existingModules.Target) -ne [System.IO.Path]::GetFullPath($modules)) {
+        throw 'node_modules does not point to the selected Codex runtime. Inspect and repair this local junction explicitly.'
+    }
+} else {
     New-Item -ItemType Junction -Path $moduleLink -Target $modules | Out-Null
 }
 $workDir = Join-Path $projectRoot ('.catalog-work\run-' + [guid]::NewGuid().ToString('N'))

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "tools": [
+    {
+      "id": "catalog",
+      "summary": "XLSX 产品观察、增量检索、选品与可追溯 PPT 图册。",
+      "tags": ["xlsx", "excel", "ppt", "产品", "报价", "选品", "图册", "catalog"],
+      "entrypoint": "catalog_tool/catalog.py",
+      "guide": "catalog_tool/WORKFLOW.md"
+    }
+  ]
+}

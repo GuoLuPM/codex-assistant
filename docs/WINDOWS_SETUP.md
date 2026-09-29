@@ -1,0 +1,59 @@
+# Windows 部署与目录迁移
+
+新设备、环境缺失或目录变动时读取。面向 Codex 执行；不需要用户自行掌握命令。项目建议 `D:\code\assistant`，可管理的运行时和缓存放 `D:\tools`。已有 Codex 自带运行时先复用，不强搬应用管理的文件。
+
+## 取得工程
+
+- 公开仓库 `https://github.com/GuoLuPM/codex-assistant`，不需要 GitHub 账号登录。优先 `git clone https://github.com/GuoLuPM/codex-assistant.git D:\code\assistant`。
+- 没有 Git：优先找 Codex 随附 Git；也可下载仓库默认分支 ZIP 解压。无 Git 仍可本地运行，公开历史检查与代码同步需要 Git。安装工具时以官方来源和当前设备为准。
+- 在 Codex 打开实际项目目录并读根 AGENTS。不要复制旧机器的 node_modules、虚拟环境或临时构建目录。
+
+## 入口与检索环境
+
+入口发现只用 Python 3.11+ 标准库。Windows `assistant.ps1` 的顺序：显式 `ASSISTANT_PYTHON` → 指定/默认 Codex Runtime 的 Python → PATH Python。显式路径无效就报错，不悄悄换环境。
+
+```powershell
+# 使用 D 盘已有 Python / venv 的示意路径；先核对文件存在
+$env:ASSISTANT_PYTHON = 'D:\tools\assistant-venv\Scripts\python.exe'
+./assistant.ps1 doctor
+& $env:ASSISTANT_PYTHON -m pip install -r catalog_tool/requirements.txt
+./assistant.ps1 list
+```
+
+如需新建虚拟环境，用已核验的 Python 执行 `-m venv D:\tools\assistant-venv`，pip 缓存可通过 `PIP_CACHE_DIR` 指向 D 盘。`doctor` 返回实际 Python 和项目路径，只表示入口可用。catalog 检索还需 openpyxl/Pillow 与 SQLite FTS5；运行其测试验证实际依赖。
+
+## PPT 环境
+
+PPT 使用 Codex 桌面版提供的 Node/Python、`@oai/artifact-tool` 与 Presentations skill。普通 pip 安装不包含完整导出环境。通过 Codex 的 `load_workspace_dependencies` 查实际运行时，再读取当前 Presentations skill 定位；不要照抄另一台电脑的用户名或版本号。
+
+- `ASSISTANT_RUNTIME_ROOT`：含 `python/python.exe`、`node/bin/node.exe`、`node/node_modules`、`bin/override` 的运行时根目录。
+- `ASSISTANT_PRESENTATIONS_SKILL`：包含 `container_tools/artifact_tool_utils.mjs` 的 skill 目录。
+- 单次也可 `run catalog ppt ... --runtime-root 路径 --skill-dir 路径`。PPT 管线使用这里选中的整套环境；`ASSISTANT_PYTHON` 只决定入口/检索 Python。
+- `catalog_tool/node_modules` 是本机 Junction。已有链接若指向另一套运行时会明确报错；核对目标后只修复链接，不删除依赖目标目录。
+- 默认从本机用户目录发现 Codex 运行时；没有该环境就报告缺少哪些依赖，不把未核验的文件称作已完成 PPT。
+
+## 私有数据与迁移
+
+全新部署将工作簿放 `data/`，复制必要的 `catalog.local.json` / `style.local.json` 与私有映射；这些均不上传。没有旧索引时，首次按 `来源.xlsx --map 映射.local.json` 登记，随后增量复用。
+
+**完整项目改名 / 搬盘 / 迁往新 Windows：**保留来源相对目录、配置与 `.catalog-index`（含数据库和映射）。先迁移注册，再日常 index；不要在旧绝对路径失效时直接把所有来源按自动模式导入。
+
+```powershell
+./assistant.ps1 run catalog relocate --from 'E:\code\old-project' --to 'D:\code\assistant'
+./assistant.ps1 run catalog relocate --from 'E:\code\old-project' --to 'D:\code\assistant' --apply
+./assistant.ps1 run catalog index ./data
+./assistant.ps1 run catalog search --query '关键词' --limit 5
+```
+
+`--from` 必须来自旧注册路径，而不是猜测；`sources` 可分页观察。第一条只检查并返回最多 10 项计划；`--apply` 在单次数据库事务内重读迁移来源，修复来源、映射、图片路径和产品 ID。哈希或配置变动、目标已注册、缺失文件都会失败，旧登记保留。不会修改或删除原始工作簿。迁移后重新检索，不复用旧 ID。
+
+仅迁移旧根目录下的已登记来源；根目录外的来源/映射需单独保持可访问或另行明确迁移。文件内容也改变时先处理搬迁身份与新版本顺序，不跳过哈希校验。跨操作系统的路径格式转换不在此命令合同内。
+
+## 验收
+
+```powershell
+& $env:ASSISTANT_PYTHON -m unittest discover -s tests -v
+& $env:ASSISTANT_PYTHON -m unittest discover -s catalog_tool/tests -v
+```
+
+再查一条真实记录、核对价格标签与来源；PPT 环境齐全时用明确选品通过 `ppt --ids ... --price-fields ...` 生成并视觉抽查。只有完成这一项才能说 PPT 已部署成功。已有客户成品时，冒烟产物放私有临时目录并收尾，不替换客户成品。用户日常只收到一个最终文件。

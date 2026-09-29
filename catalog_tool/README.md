@@ -1,4 +1,6 @@
-# 使用与设计说明
+# catalog · 详细参考
+
+先读 [短流程](WORKFLOW.md)，只在参数、样式、准确性边界或开发时查本文件对应章节。统一入口是 `./assistant.ps1 run catalog ...`；下文的 `catalog.ps1` 和 `run.ps1` 是同一实现的兼容入口。
 
 ## 1. 工作流
 
@@ -12,7 +14,7 @@
 
 自然语言由助手理解，然后转成明确参数。无需额外模型调用、向量库、服务进程或网页。预算和 PPT 上的展示价格可以不同，必须分别选择；面向客户时按需求选择零售价等字段。
 
-首次 `index` 传文件或目录；支持多个路径、递归发现 `.xlsx`，排除内部缓存、输出和 Excel 临时锁文件。后续 `index` 不传路径会刷新已注册来源。文件删除或搬家时显式 `remove-source 旧路径`，再导入新位置。源文件永不由工具删除。
+首次 `index` 传文件或目录；支持多个路径、递归发现 `.xlsx`，排除内部缓存、输出和 Excel 临时锁文件。后续 `index` 不传路径会刷新已注册来源。完整目录搬迁先用 `relocate --from 旧根 --to 新根` 检查，再加 `--apply` 恢复映射与登记；见 [迁移合同](../docs/WINDOWS_SETUP.md)。单文件单独迁移时记录旧映射，以新位置和同一映射重新导入，再显式 `remove-source 旧路径`。源文件永不由工具删除。
 
 `search` 返回紧凑 JSON，默认 10 条、最多 50 条，`--offset` 翻页；包含 ID、名称、配置、原始价格、分类来源、文件/表/行。没有指定价格口径时按角色返回 `prices: {角色: {label, value}}`，不会因相同标签覆盖另一价格。分类不明保留“未分类”。`sources --limit 10 --offset 0` 查看登记路径、映射和过期状态。
 
@@ -109,14 +111,14 @@ ID 来自源路径、工作表、型号（缺失时用名称）、显式配置�
 
 ## 5. 环境、验证与公开检查
 
-检索：Python 3.11+，SQLite 需启用 FTS5。依赖见 `requirements.txt`。Windows 包装器优先用 Codex 的 Python；其他环境直接 `python catalog_tool/catalog.py ...`。
+检索：Python 3.11+，SQLite 需启用 FTS5。依赖见 `requirements.txt`。Windows 包装器复用共享入口的 Python 选择；其他环境直接 `python assistant.py run catalog ...`。新设备按 [部署文档](../docs/WINDOWS_SETUP.md) 设置路径。
 
-PPT：Windows PowerShell、Codex 随附 Node.js/Python、`@oai/artifact-tool` 和 Presentations skill；`run.ps1 -RuntimeRoot ... -SkillDir ...` 可覆盖路径。构建过程验证包结构、画布、字体和重新导入，并逐页比对名称、序号、所选价格、完整说明及来源。机器校验不替代客户发出前的视觉抽查。
+PPT：Windows PowerShell、Codex 随附 Node.js/Python、`@oai/artifact-tool` 和 Presentations skill；统一命令 `./assistant.ps1 run catalog ppt --ids ID1 ID2 --price-fields retail_price`，环境可用 `--runtime-root` / `--skill-dir` 覆盖，也支持 `ASSISTANT_RUNTIME_ROOT` / `ASSISTANT_PRESENTATIONS_SKILL`。旧 `run.ps1 -RuntimeRoot ... -SkillDir ...` 继续可用。构建过程验证包结构、画布、字体和重新导入，并逐页比对名称、序号、所选价格、完整说明及来源。机器校验不替代客户发出前的视觉抽查。
 
 ```powershell
 python -m unittest discover -s catalog_tool/tests -v
 python catalog_tool/benchmark.py --rows 10000
-python catalog_tool/audit_public.py
+python scripts/audit_public.py
 ```
 
 基准使用合成数据，结果仅写终端，临时样本自动清理。真实图片、描述长度、源表大小、磁盘与机器性能会改变耗时。核心测试使用临时合成工作簿，不依赖私有业务文件；GitHub Actions 不运行依赖 Codex 桌面环境的 PPT 导出。
