@@ -58,4 +58,4 @@
 
 通过 `annotate --records 路径.local.json` 写入。evidence 必须逐字来自该产品已保存事实；不能从另一款借证据。`source` 还要求标签词出现在证据里，否则用 `inferred` 并写判断理由。推荐标签不补造商品参数、认证或效果。
 
-检索组合：`search --price-field retail_price --max-price 150 --category 杯壶 --tag occasion:新年 --tag audience:同事`。多个 tag 默认全部满足，`--tag-mode any` 任一满足，`--tag-origin source` 仅采信来源明示。无标签的商品不自动排除为“不适合”：先看有界原始事实，可由 Codex补判断标签再查询。合并多个查询的候选只按产品 ID 去重。
+检索组合：`search --price-field retail_price --max-price 150 --category 杯壶 --tag occasion:新年 --tag audience:同事`。多个 tag 默认全部满足，`--tag-mode any` 任一满足，`--tag-origin source` 仅采信来源明示。无标签的商品不自动排除为“不适合”。多路补查、资料整理及跨来源同款报价分组遵循 [资料与检索合同](POOL_RETRIEVAL.md)：保留来源记录，只有明确复核的同款关系可折叠显示。

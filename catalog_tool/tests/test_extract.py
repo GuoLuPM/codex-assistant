@@ -14,6 +14,20 @@ TOOL = Path(__file__).resolve().parents[1] / "extract.py"
 
 
 class ExtractTest(unittest.TestCase):
+    def test_automatic_prices_keep_commercial_basis_distinct(self):
+        sys.path.insert(0, str(TOOL.parent))
+        from extract import read_products
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            book = Workbook()
+            book.active.append(['名称', '零售价', '参考价B', '代理价', '供货价', '成本价'])
+            book.active.append(['同一款水杯', 150, 120, 90, 85, 80])
+            source = root / 'mixed-prices.xlsx'
+            book.save(source)
+            items, _ = read_products(source, root / 'images')
+            self.assertEqual({k: v['value'] for k, v in items[0]['prices'].items()},
+                             {'retail_price': 150, 'reference_price_b': 120, 'agent_price': 90, 'supply_price': 85, 'cost_price': 80})
+
     def test_preserves_values_and_allows_missing_images(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

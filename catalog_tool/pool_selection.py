@@ -24,6 +24,8 @@ class Selections:
             payload_hash TEXT NOT NULL, snapshot TEXT NOT NULL, selected INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY(session_id,product_id));
         """)
+        if 'context_hash' not in {row[1] for row in self.db.execute('PRAGMA table_info(pool_choices)')}:
+            self.db.execute('ALTER TABLE pool_choices ADD COLUMN context_hash TEXT')
 
     def create(self, ids, price_fields, title="请选择产品"):
         if not ids or len(ids) > 100 or len(ids) != len(set(ids)):
@@ -45,14 +47,14 @@ class Selections:
                         "image": str(Path(image).relative_to(self.pool.root)) if image else None,
                         "tags": item["tags"]}
             member = self.db.execute("SELECT payload_hash FROM pool_members WHERE product_id=?", (item["id"],)).fetchone()
-            snapshots.append((item["id"], member[0], snapshot))
+            snapshots.append((item["id"], member[0], snapshot, self.pool.selection_context(item["id"])))
         session_id = "s_" + secrets.token_hex(12)
         with self.db:
             self.db.execute("INSERT INTO pool_sessions(id,token,title,price_fields,created_at) VALUES (?,?,?,?,?)",
                             (session_id, secrets.token_urlsafe(32), title, encoded(price_fields), time.time()))
-            self.db.executemany("INSERT INTO pool_choices(session_id,product_id,position,payload_hash,snapshot) VALUES (?,?,?,?,?)",
-                                [(session_id, product_id, position, signature, encoded(snapshot))
-                                 for position, (product_id, signature, snapshot) in enumerate(snapshots)])
+            self.db.executemany("INSERT INTO pool_choices(session_id,product_id,position,payload_hash,snapshot,context_hash) VALUES (?,?,?,?,?,?)",
+                                [(session_id, product_id, position, signature, encoded(snapshot), context)
+                                 for position, (product_id, signature, snapshot, context) in enumerate(snapshots)])
         directory = self.pool.root / "sessions" / session_id
         directory.mkdir(parents=True, exist_ok=True)
         template = Path(__file__).with_name("pool_select.html").read_text(encoding="utf-8")
@@ -102,6 +104,10 @@ class Selections:
                 WHERE c.session_id=? AND c.selected=1""", (session_id,)):
                 if row["frozen"] != row["current"]:
                     raise ValueError("Selected product changed since presentation of choices")
+            for row in self.db.execute('SELECT product_id,context_hash FROM pool_choices WHERE session_id=? AND selected=1', (session_id,)):
+                current = self.pool.selection_context(row['product_id'])
+                if row['context_hash'] is not None and row['context_hash'] != current:
+                    raise ValueError('Selected quote/recommendation context changed; create a fresh selection')
             self.pool.details(state["selected_ids"], verify_fresh=True)
             self.db.execute("UPDATE pool_sessions SET state='sealed' WHERE id=?", (session_id,))
         return self.state(session_id)

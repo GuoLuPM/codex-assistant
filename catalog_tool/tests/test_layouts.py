@@ -224,7 +224,7 @@ class LayoutTests(unittest.TestCase):
         try:
             store.index([self.source])
             product = store.search()["items"][0]
-            self.assertEqual(product["prices"]["agent_price"]["error"], "spreadsheet_error")
+            self.assertEqual(product["prices"]["supply_price"]["error"], "spreadsheet_error")
             with self.assertRaisesRegex(ValueError, "spreadsheet error"):
                 store.stage([product["id"]], self.root / "stage")
         finally:

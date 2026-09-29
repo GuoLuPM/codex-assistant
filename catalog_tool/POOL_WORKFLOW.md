@@ -8,15 +8,15 @@
 2. XLSX 自动入库或返回 `needs_mapping`；异形表读 [来源映射](../docs/SOURCE_MAPPING.md)，借原 `catalog inspect` 看坐标，然后 `add 路径 --map 私有映射.local.json`。禁止为文件名/品牌写解析分支。
 3. PDF / PPTX / DOCX / TXT / CSV / XLS 等：`inspect --file 文件ID --limit 20` 看有界证据；按 `--page` / `--ref` / `--text-offset` 深读。Codex 判断产品粒度，按 [入库合同](../docs/POOL_IMPORT.md) 写私有 JSON，再 `import --file 文件ID --records 文件.local.json`；可每次只加一款，同一来源定位重试不重复。
 4. 图片/扫描件先看原图；PDF 可 `render --file 文件ID --page 1`。逐字观察后 `observe` 留显式视觉转录，再引用其 ref。无法识别的价格不猜；视觉转录与原生文字验证区分标记。`.doc` 等不支持格式先明确转换，不能当空表成功。
-5. `stats` 核对增加数、缺失字段和标签覆盖。缺价格或图片仍可入库。用户同名的新报价不自动覆盖旧报价，不自行合并不同来源商品。
+5. 新增记录后入口自动整理原文明确标注的品牌/规格。`quality --price-field 实际价格字段` 核对缺失及覆盖；旧库可 `derive`。需要补分类/品牌、修正检索资料或管理新旧报价，读 [资料与检索合同](../docs/POOL_RETRIEVAL.md)。缺价格或图片仍可入库，同名新文件不自动覆盖旧报价。
 
 ## 用户描述需要
 
 1. 把口语拆成硬条件（价格口径、预算、品类、来源等）和推荐条件（场合、对象、用途、风格）。不知道价格口径且会影响结果时才问；别把参考价当供货价。
 2. `facets --field price` / `facets --field category` 查实际字段。`facets --kind occasion` / `--kind audience` 查已登记推荐标签；标签种类可扩展。
-3. 例：`search --price-field retail_price --max-price 150 --tag occasion:新年 --limit 10`。多个 tag 默认 AND；`--tag-mode any` 为 OR。文字默认名称/型号/规格 AND，`--scope all` 扩展原始说明。可与品类/品牌/供应商/排除词组合。
+3. 单一明确条件可 `search`；抽象、多条件、跨品类需求读 [资料与检索合同](../docs/POOL_RETRIEVAL.md)，写一个私有计划后 `retrieve --plan 路径`。所有补查共用硬条件，工具合并候选并报告覆盖；已登记的同义词可复用。不在多轮查询中悄悄放宽预算。
 4. **标签没有命中不等于没有适合的商品。** 查看 `stats.tagged_products`；有界读取候选事实，必要时按 [入库合同](../docs/POOL_IMPORT.md) `annotate` 场合/对象等标签，附来源证据和推荐理由。只读到“礼盒”可以形成送礼建议，不能推断认证、功效、材质或受众安全。
-5. `show --ids 少量ID` 核对；默认说明 400 字，可按字段续读。完整原文留在脚本内。`source` 标签是原文明确标注，`inferred` 是 Codex 判断；对客户展示时有区分。
+5. `show --ids 少量ID` 核对；默认说明 400 字，可按字段续读；`--metadata` 查看补充资料及报价版本。`source` 是原文明示，`inferred` 是 Codex 判断。没有证据满足的偏好，要用口语说明“这个资料里没写”，不能说已满足；对用户尽量简短好懂。
 
 ## 让用户选择并导出
 

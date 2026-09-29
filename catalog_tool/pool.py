@@ -45,6 +45,28 @@ def main(argv=None):
     importing.add_argument("--records", type=Path, required=True)
     annotate = commands.add_parser("annotate", help="Add transparent scenario/audience/material/etc tags with evidence")
     annotate.add_argument("--records", type=Path, required=True)
+    for name in ('enrich', 'vocabulary', 'source-update', 'link', 'offer-terms'):
+        commands.add_parser(name).add_argument('--records', type=Path, required=True)
+    derive = commands.add_parser('derive', help='Extract only explicit labeled metadata; ambiguous facts stay unknown')
+    target = derive.add_mutually_exclusive_group()
+    target.add_argument('--ids', nargs='+')
+    target.add_argument('--file')
+    quality = commands.add_parser('quality', help='Missing metadata, unparseable prices and unknown source versions')
+    quality.add_argument('--price-field')
+    queue = commands.add_parser('review-queue', help='Bounded missing metadata queue for Codex')
+    queue.add_argument('--field', choices=['brand', 'category', 'supplier'], default='category')
+    queue.add_argument('--limit', type=int, default=20)
+    queue.add_argument('--offset', type=int, default=0)
+    retrieval = commands.add_parser('retrieve', help='Run a bounded multi-lane plan, preserving all shared hard filters')
+    retrieval.add_argument('--plan', type=Path, required=True)
+    history = commands.add_parser('history', help='Audit summaries; request one event for bounded evidence text')
+    history.add_argument('--kind', choices=['product', 'source', 'offer', 'group', 'vocabulary'])
+    history.add_argument('--id')
+    history.add_argument('--event', type=int)
+    history.add_argument('--limit', type=int, default=10)
+    history.add_argument('--offset', type=int, default=0)
+    history.add_argument('--max-chars', type=int, default=1000)
+    history.add_argument('--text-offset', type=int, default=0)
     search = commands.add_parser("search", help="Bounded factual AND query plus price/category/tag filters")
     search.add_argument("--query", default="")
     search.add_argument("--price-field")
@@ -62,12 +84,20 @@ def main(argv=None):
     search.add_argument("--tag-mode", choices=["all", "any"], default="all")
     search.add_argument("--tag-origin", choices=["source", "inferred"])
     search.add_argument("--file")
+    search.add_argument('--latest', action='store_true')
+    search.add_argument('--include-history', action='store_true')
+    search.add_argument('--series')
+    search.add_argument('--group', help='Page all source offers for a reviewed product group')
+    search.add_argument('--exclude-category', action='append', default=[])
+    search.add_argument('--price-label', action='append', default=[])
     show = commands.add_parser("show")
     show.add_argument("--ids", nargs="+", required=True)
     show.add_argument("--fields", nargs="+", choices=DETAIL_FIELDS + EXTRA_FIELDS)
     show.add_argument("--raw-fields", nargs="+", default=[])
     show.add_argument("--max-chars", type=int, default=400)
     show.add_argument("--text-offset", type=int, default=0)
+    show.add_argument('--metadata', action='store_true', help='Include evidence-backed search metadata and quote context')
+    show.add_argument('--metadata-field', action='append', default=[], help='Project at most eight search facts with --metadata')
     commands.add_parser("stats")
     facets = commands.add_parser("facets")
     facets.add_argument("--field", choices=["category", "brand", "supplier", "price", "tag"], default="tag")
@@ -103,6 +133,8 @@ def main(argv=None):
         pool = Pool(args.index_dir, config)
         if args.command == "add":
             result = pool.add(args.input, args.map)
+            if result.get('products_added'):
+                result['normalization'] = pool.derive(file_id=result['file_id'])
         elif args.command == "files":
             result = pool.files(args.limit, args.offset)
         elif args.command == "inspect":
@@ -125,11 +157,29 @@ def main(argv=None):
             result = pool.observe(args.file, args.image_ref, args.text_file.read_text(encoding="utf-8-sig"), args.reviewer)
         elif args.command == "import":
             result = pool.import_records(args.file, json.loads(args.records.read_text(encoding="utf-8-sig")))
+            if result.get('added'):
+                result['normalization'] = pool.derive(file_id=args.file)
         elif args.command == "annotate":
             result = pool.annotate(json.loads(args.records.read_text(encoding="utf-8-sig")))
+        elif args.command in ('enrich', 'vocabulary', 'source-update', 'link', 'offer-terms'):
+            method = {'enrich': pool.enrich, 'vocabulary': pool.vocabulary, 'source-update': pool.update_sources,
+                      'link': pool.link_products, 'offer-terms': pool.set_offer_terms}[args.command]
+            result = method(json.loads(args.records.read_text(encoding='utf-8-sig')))
+        elif args.command == 'derive':
+            result = pool.derive(args.ids, args.file)
+        elif args.command == 'quality':
+            result = pool.quality(args.price_field)
+        elif args.command == 'review-queue':
+            result = pool.review_queue(field=args.field, limit=args.limit, offset=args.offset)
+        elif args.command == 'retrieve':
+            result = pool.retrieve(json.loads(args.plan.read_text(encoding='utf-8-sig')))
+        elif args.command == 'history':
+            result = pool.meta.history(args.kind, args.id, args.event, args.limit, args.offset, args.max_chars, args.text_offset)
         elif args.command == "search":
             keys = ("query", "price_field", "minimum", "maximum", "category", "brand", "supplier", "scope", "exclude", "has_image", "limit", "offset", "sort")
-            result = pool.search(**{k: getattr(args, k) for k in keys}, constraints={"tags": args.tag, "tag_mode": args.tag_mode, "tag_origin": args.tag_origin, "file_id": args.file})
+            result = pool.search(**{k: getattr(args, k) for k in keys}, constraints={"tags": args.tag, "tag_mode": args.tag_mode, "tag_origin": args.tag_origin, "file_id": args.file,
+                'latest': args.latest, 'include_history': args.include_history, 'series': args.series, 'product_group': args.group,
+                'exclude_categories': args.exclude_category, 'price_labels': args.price_label})
         elif args.command == "show":
             if len(args.ids) > 10:
                 raise ValueError("show accepts at most 10 IDs")
@@ -137,6 +187,20 @@ def main(argv=None):
             result = view_details(items, args.fields, args.raw_fields, args.max_chars, args.text_offset)
             for compact, item in zip(result, items):
                 compact["tags"] = item["tags"][:10]
+                if args.metadata:
+                    profile = item['metadata']
+                    fields = args.metadata_field or list(profile['facts'])[:8]
+                    if len(fields) > 8 or set(fields) - set(profile['facts']):
+                        raise ValueError('Request at most eight existing metadata fields')
+                    compact['metadata'] = {'revision': profile['revision'], 'fact_count': len(profile['facts']),
+                        'field_names': list(profile['facts']), 'facts': {field: {k: v[:args.max_chars] if isinstance(v, str) else v
+                            for k, v in profile['facts'][field].items()} for field in fields}}
+                    compact['quote_source'] = {k: item['quote_source'][k] for k in ('revision', 'series', 'issued_on', 'status', 'superseded_by')}
+                    compact['product_group'] = item['product_group']
+                    compact['offer_terms'] = {field: {'revision': terms['revision'], 'terms': {k: v['value'] for k, v in terms['terms'].items()}}
+                                              for field, terms in item['offer_terms'].items()}
+                else:
+                    compact['metadata_revision'] = item['metadata']['revision']
         elif args.command == "facets":
             result = (pool.tag_facets(args.kind, args.query, args.limit, args.offset) if args.field == "tag"
                       else pool.facets(args.field, args.query, args.limit, args.offset))

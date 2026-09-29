@@ -13,8 +13,14 @@ ALIASES = {
     "serial": ["序号", "编号"],
     "name": ["产品名称", "商品名称", "品名", "名称"],
     "model": ["型号", "产品型号", "SKU", "货号", "物料编码"],
-    "agent_price": ["代理价", "供货价", "出货价", "采购价", "进货价", "成本价"],
-    "reference_price_b": ["参考价B", "参考价", "市场参考价", "建议零售价", "零售价", "销售价", "售价"],
+    "agent_price": ["代理价"],
+    "supply_price": ["供货价", "供货价格", "供价", "出货价"],
+    "purchase_price": ["采购价", "进货价"],
+    "cost_price": ["成本价"],
+    "reference_price_b": ["参考价B"],
+    "reference_price": ["参考价", "市场参考价"],
+    "retail_price": ["建议零售价", "零售价", "零售价格"],
+    "sale_price": ["销售价", "售价"],
     "features": ["功能特点", "产品特点", "产品功能", "卖点", "规格参数", "产品规格", "规格", "参数", "描述", "说明"],
     "category": ["品类", "类目", "类别", "分类", "产品类别"],
     "brand": ["品牌"],
@@ -22,6 +28,7 @@ ALIASES = {
     "product_image": ["产品图片", "产品图", "商品图片", "图片"],
     "package_image": ["包装图", "包装图片"],
 }
+PRICE_ROLES = tuple(key for key in ALIASES if key.endswith('_price') or key == 'reference_price_b')
 LEGACY_LABELS = {"serial": "序号", "name": "产品名称", "agent_price": "代理价",
                  "reference_price_b": "参考价B", "features": "功能特点",
                  "product_image": "产品图片", "package_image": "包装图"}
@@ -36,6 +43,14 @@ def normalized_header(value):
     return re.sub(r"\s+", "", str(value or "")).casefold()
 
 
+PRICE_LABEL_ROLES = {normalized_header(label): role for role in PRICE_ROLES for label in ALIASES[role]}
+
+
+def price_basis(label):
+    """Only recognize explicit commercial labels; unknown labels remain unknown."""
+    return PRICE_LABEL_ROLES.get(normalized_header(label))
+
+
 def json_value(value):
     return value.isoformat() if isinstance(value, (datetime, date)) else value
 
@@ -48,6 +63,17 @@ def _automatic_plans(sheet, schema):
     last_row, last_col = max(c.row for c in populated), max(c.column for c in populated)
     aliases = {**ALIASES, **schema.get("aliases", {})}
     aliases = {key: {normalized_header(x) for x in values} for key, values in aliases.items()}
+    claimed = {}
+    for role, values in schema.get('aliases', {}).items():
+        if role not in PRICE_ROLES: continue
+        for value in values:
+            label = normalized_header(value)
+            if label in claimed and claimed[label] != role:
+                raise ValueError('Conflicting explicit price aliases; use a coordinate mapping')
+            claimed[label] = role
+    for label, role in claimed.items():
+        for other in PRICE_ROLES:
+            if other != role: aliases[other].discard(label)
     candidates = []
     for row in range(1, min(last_row, schema.get("header_search_rows", 20)) + 1):
         headers = {col: str(sheet.cell(row, col).value).strip() for col in range(1, last_col + 1)
@@ -68,8 +94,8 @@ def _automatic_plans(sheet, schema):
             raise ValueError(f"Multiple columns for {key} in {sheet.title}; provide a coordinate mapping")
     fields = {key: get_column_letter(columns[key][0]) for key in
               ("name", "model", "serial", "category", "brand", "supplier") if columns.get(key)}
-    prices = {key: get_column_letter(columns[key][0]) for key in ("agent_price", "reference_price_b") if columns[key]}
-    used = {col for key in ("agent_price", "reference_price_b") for col in columns[key]}
+    prices = {key: get_column_letter(columns[key][0]) for key in PRICE_ROLES if columns[key]}
+    used = {col for key in PRICE_ROLES for col in columns[key]}
     prices.update({label: get_column_letter(col) for col, label in headers.items()
                    if col not in used and (label.endswith("价") or label.endswith("价格"))})
     details = sorted(set(columns["features"] + [col for col, label in headers.items() if label in schema.get("detail_fields", [])]))

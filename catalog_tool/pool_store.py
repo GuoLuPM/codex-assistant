@@ -51,6 +51,45 @@ class Pool(Catalog):
           CREATE TABLE IF NOT EXISTS pool_evidence (
             document_id TEXT PRIMARY KEY REFERENCES pool_documents(id), entries TEXT NOT NULL);
         """)
+        from pool_metadata import Metadata, ensure_schema
+        ensure_schema(self.db)
+        self.meta = Metadata(self)
+        from pool_lifecycle import Lifecycle, ensure_schema as ensure_lifecycle
+        ensure_lifecycle(self.db)
+        self.lifecycle = Lifecycle(self)
+        self.db.create_function('pool_norm', 1, normalize, deterministic=True)
+        from extract import price_basis
+        self.db.create_function('pool_price_basis', 1, price_basis, deterministic=True)
+
+    def update_sources(self, records):
+        return self.lifecycle.update_sources(records)
+
+    def link_products(self, records):
+        return self.lifecycle.link_products(records)
+
+    def set_offer_terms(self, records):
+        return self.lifecycle.set_offer_terms(records)
+
+    def selection_context(self, product_id):
+        return self.lifecycle.selection_context(product_id)
+
+    def enrich(self, records):
+        return self.meta.enrich(records)
+
+    def derive(self, ids=None, file_id=None):
+        return self.meta.derive(ids, file_id)
+
+    def quality(self, price_field=None):
+        return self.meta.quality(price_field)
+
+    def review_queue(self, **kwargs):
+        return self.meta.review_queue(**kwargs)
+
+    def vocabulary(self, records):
+        return self.meta.vocabulary(records)
+
+    def aliases(self, kind, term):
+        return self.meta.aliases(kind, term)
 
     def document(self, file_id):
         row = self.db.execute("SELECT * FROM pool_documents WHERE id=?", (file_id,)).fetchone()
@@ -73,8 +112,14 @@ class Pool(Catalog):
         rows = self.db.execute("""SELECT d.id AS file_id,d.name,d.status,
             (SELECT count(*) FROM pool_members m WHERE m.document_id=d.id) AS products
             FROM pool_documents d ORDER BY d.created_at,d.id LIMIT ? OFFSET ?""", (limit, offset))
+        items = []
+        for row in rows:
+            item = dict(row)
+            state = self.lifecycle.source_state(item['file_id'])
+            item['quote'] = {key: state[key] for key in ('revision', 'series', 'issued_on', 'status', 'superseded_by')}
+            items.append(item)
         return {"total": self.db.execute("SELECT count(*) FROM pool_documents").fetchone()[0],
-                "items": [dict(r) for r in rows], "offset": offset, "limit": limit}
+                "items": items, "offset": offset, "limit": limit}
 
     def add(self, source, mapping_path=None):
         source = Path(source).resolve()
@@ -276,6 +321,8 @@ class Pool(Catalog):
         return self._commit(file_id, pairs)
 
     def stale_sources(self):
+        if getattr(self, '_freshness_snapshot', None) is not None:
+            return self._freshness_snapshot
         stale = []
         for row in self.db.execute("SELECT path,size,mtime FROM sources"):
             try:
@@ -298,6 +345,10 @@ class Pool(Catalog):
             for image in item["images"]:
                 image["path"] = str(self.root / image["path"])
             item["tags"] = self.tags(item["id"])
+            item["metadata"] = self.meta.profile(item["id"])
+            item["quote_source"] = self.lifecycle.source_state(file_id)
+            item["product_group"] = self.lifecycle.product_group(item["id"])
+            item["offer_terms"] = self.lifecycle.offer_terms(item["id"])
         if verify_fresh:
             check_sources(items)
             for item in items:
@@ -319,7 +370,8 @@ class Pool(Catalog):
             item = self.details([tag["id"]], verify_fresh=True)[0]
             if not re.fullmatch(r"[a-z][a-z0-9_]{0,39}", tag["kind"]) or not 1 <= len(tag["value"]) <= 120:
                 raise ValueError("Invalid tag kind/value")
-            original = "\n".join(str(item.get(k) or "") for k in ("name", "model", "variant", "features", "category")) + encoded(item["raw_fields"])
+            from pool_metadata import own_text
+            original = own_text(item)
             if not tag["evidence"] or tag["evidence"] not in original or len(tag["evidence"]) > 1000:
                 raise ValueError("Tag evidence must quote the product's own source facts")
             if tag["origin"] not in {"source", "inferred"} or not tag["reason"] or len(tag["reason"]) > 500:
@@ -333,47 +385,46 @@ class Pool(Catalog):
         return {"annotated": len(prepared)}
 
     def _search_constraints(self, constraints):
-        if set(constraints) - {"tags", "tag_mode", "file_id", "tag_origin", "category"}:
-            raise ValueError("Unknown pool search constraints")
-        where, params, clauses = [], [], []
-        if constraints.get("category"):
-            category = constraints["category"]
-            where.append("""(p.category=? OR substr(p.category,1,?)=? OR EXISTS
-                (SELECT 1 FROM pool_tags ct WHERE ct.product_id=p.id AND ct.kind='category'
-                 AND (ct.value=? OR substr(ct.value,1,?)=?)))""")
-            params.extend([category, len(category)+1, category+"/", category, len(category)+1, category+"/"])
-        if constraints.get("file_id"):
-            where.append("p.source_path=?")
-            params.append(constraints["file_id"])
-        tags = constraints.get("tags", [])
-        if len(tags) > 12 or constraints.get("tag_mode", "all") not in {"all", "any"}:
-            raise ValueError("Invalid tag query")
-        for tag in tags:
-            kind, sep, value = tag.partition(":")
-            if not sep or not kind or not value:
-                raise ValueError("Tag query uses kind:value")
-            clause = "EXISTS (SELECT 1 FROM pool_tags t WHERE t.product_id=p.id AND t.kind=? AND t.value=?"
-            params.extend([kind, value])
-            if constraints.get("tag_origin"):
-                if constraints["tag_origin"] not in {"source", "inferred"}:
-                    raise ValueError("Invalid tag origin")
-                clause += " AND t.origin=?"
-                params.append(constraints["tag_origin"])
-            clauses.append(clause + ")")
-        if clauses:
-            where.append("(" + (" AND " if constraints.get("tag_mode", "all") == "all" else " OR ").join(clauses) + ")")
-        return where, params
+        from pool_retrieval import search_constraints
+        return search_constraints(self, constraints)
+
+    def _search_order(self, terms):
+        if terms:
+            return super()._search_order(terms)
+        from pool_retrieval import field_sql
+        stable = 'p.source_path,p.sheet,p.source_row,p.id'
+        return 'row_number() OVER (PARTITION BY ' + field_sql('category') + ' ORDER BY ' + stable + '),' + stable
+
+    def retrieve(self, plan):
+        from pool_retrieval import retrieve
+        return retrieve(self, plan)
 
     def search(self, **kwargs):
         constraints = dict(kwargs.get("constraints") or {})
-        if kwargs.get("category"):
-            constraints["category"] = kwargs.pop("category")
-        kwargs["constraints"] = constraints
+        for field in ('category', 'brand', 'supplier'):
+            if kwargs.get(field):
+                if field in constraints and constraints[field] != kwargs[field]:
+                    raise ValueError('Conflicting metadata filter ' + field)
+                constraints[field] = kwargs.pop(field)
+        if kwargs.get('price_field'):
+            if constraints.get('price_field', kwargs['price_field']) != kwargs['price_field']:
+                raise ValueError('Conflicting price field')
+            constraints['price_field'] = kwargs['price_field']
+        kwargs['constraints'] = constraints
         result = super().search(**kwargs)
-        for item in result["items"]:
-            tags = self.tags(item["id"])
-            item["tags"] = [{k: t[k] for k in ("kind", "value", "origin")} for t in tags[:5]]
-            item["tag_count"] = len(tags)
+        for item in result['items']:
+            tags = self.tags(item['id'])
+            item['tags'] = [{k: tag[k] for k in ('kind', 'value', 'origin')} for tag in tags[:5]]
+            item['tag_count'] = len(tags)
+            profile = self.meta.profile(item['id'])
+            for field in ('category', 'brand', 'supplier'):
+                if field in profile['facts']:
+                    item[field] = profile['facts'][field]['value']
+                    item[field + '_origin'] = profile['facts'][field]['origin']
+            item['attributes'] = {key: {k: f[k] for k in ('value', 'unit', 'origin')} for key, f in profile['facts'].items() if key.startswith('attr.')}
+            item['product_group'] = self.lifecycle.product_group(item['id'])
+            item['offer_terms'] = self.lifecycle.offer_terms(item['id'], kwargs.get('price_field'))
+        result['coverage'] = self.quality(kwargs.get('price_field'))
         return result
 
     def tag_facets(self, kind=None, query="", limit=20, offset=0):
@@ -386,18 +437,22 @@ class Pool(Catalog):
         return {"total": total, "items": [dict(r) for r in rows], "limit": limit, "offset": offset}
 
     def facets(self, field, query="", limit=20, offset=0):
-        if field != "category":
+        if field not in ('category', 'brand', 'supplier'):
             return super().facets(field, query, limit, offset)
         if not 1 <= limit <= 50 or offset < 0 or len(query) > 160:
-            raise ValueError("Invalid category pagination")
-        base = """ FROM (SELECT id AS product_id,category AS value FROM products
-            UNION ALL SELECT product_id,value FROM pool_tags WHERE kind='category')
-            WHERE value<>'' AND instr(value,?)>0 GROUP BY value"""
-        total = self.db.execute("SELECT count(*) FROM (SELECT 1" + base + ")", (query,)).fetchone()[0]
-        rows = self.db.execute("SELECT value,count(DISTINCT product_id) AS count" + base + " ORDER BY count DESC,value LIMIT ? OFFSET ?", (query, limit, offset))
-        return {"field": "category", "total": total, "items": [dict(row) for row in rows], "limit": limit, "offset": offset}
+            raise ValueError('Invalid metadata facet pagination')
+        from pool_retrieval import field_sql
+        values = "SELECT p.id AS product_id," + field_sql(field) + " AS value FROM products p"
+        if field == 'category':
+            values += " UNION ALL SELECT product_id,value FROM pool_tags WHERE kind='category'"
+        base = " FROM (" + values + ") WHERE value<>'' AND instr(pool_norm(value),?)>0 GROUP BY value"
+        args = (normalize(query),)
+        total = self.db.execute('SELECT count(*) FROM (SELECT 1' + base + ')', args).fetchone()[0]
+        rows = self.db.execute('SELECT value,count(DISTINCT product_id) AS count' + base + ' ORDER BY count DESC,value LIMIT ? OFFSET ?', (*args, limit, offset))
+        return dict(field=field, total=total, items=[dict(r) for r in rows], limit=limit, offset=offset)
 
     def stats(self):
         result = super().stats()
         result["category_count"] = self.facets("category", limit=1)["total"]
+        result['quality'] = self.quality()
         return result

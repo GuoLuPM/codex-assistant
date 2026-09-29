@@ -44,7 +44,7 @@ class CatalogTests(unittest.TestCase):
 
     def test_multi_sheet_price_basis_and_compact_search(self):
         self.catalog.index([self.source])
-        result = self.catalog.search(query="耳机", price_field="agent_price", minimum=80, maximum=100)
+        result = self.catalog.search(query="耳机", price_field="supply_price", minimum=80, maximum=100)
         self.assertEqual([x["name"] for x in result["items"]], ["H1 蓝牙耳机"])
         self.assertNotIn("features", result["items"][0])
         self.assertEqual(result["items"][0]["price"]["label"], "供货价")
@@ -62,7 +62,7 @@ class CatalogTests(unittest.TestCase):
         result = self.catalog.search(query="耳机", scope="all")
         self.assertEqual(result["total"], 3)
         self.assertTrue(any("evidence" in x for x in result["items"]))
-        self.assertEqual(self.catalog.search(price_field="agent_price", maximum=0)["total"], 0)
+        self.assertEqual(self.catalog.search(price_field="supply_price", maximum=0)["total"], 0)
         self.assertIsNone(parse_price("80-150"))
         self.assertIsNone(parse_price("更新中"))
         self.assertEqual(parse_price("￥1,200.50元"), 1200.5)
@@ -80,7 +80,7 @@ class CatalogTests(unittest.TestCase):
         refreshed = self.catalog.search(query="保温杯")
         self.assertEqual(refreshed["items"][0]["id"], selected_id)
         self.assertEqual(self.catalog.search()["total"], 1)
-        self.catalog.stage([selected_id], self.root / "stage", ["agent_price"])
+        self.catalog.stage([selected_id], self.root / "stage", ["supply_price"])
         data = json.loads((self.root / "stage/catalog-data.json").read_text(encoding="utf-8"))
         self.assertEqual(data[0]["display_prices"], [{"label": "供货价", "value": 99}])
 
@@ -147,8 +147,8 @@ class CatalogTests(unittest.TestCase):
 
     def test_per_source_aliases_details_and_uncached_formula(self):
         workbook(self.source, {"数码": [["名称", "供货价", "成本价", "功率"], ["样品", 10, "=5+3", "600W"]]})
-        with self.assertRaisesRegex(ValueError, "Multiple columns"):
-            self.catalog.index([self.source])
+        self.catalog.index([self.source])
+        self.assertEqual(set(self.catalog.details([self.catalog.search()['items'][0]['id']])[0]['prices']), {'supply_price', 'cost_price'})
         self.catalog.close()
         config = {"source_schemas": [{"match": "supplier.xlsx", "aliases": {"agent_price": ["供货价"]},
                                        "detail_fields": ["功率"]}]}
@@ -157,7 +157,7 @@ class CatalogTests(unittest.TestCase):
         selected = self.catalog.search()["items"][0]["id"]
         item = self.catalog.details([selected])[0]
         self.assertEqual(item["features"], "功率：\n600W")
-        self.assertIsNone(item["prices"]["成本价"]["value"])
+        self.assertIsNone(item["prices"]["cost_price"]["value"])
         self.assertTrue(any("公式无缓存值" in issue for issue in item["issues"]))
 
 

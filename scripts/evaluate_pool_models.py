@@ -102,11 +102,19 @@ def evaluate(codex, model, directory):
         price = resolve_price(product["prices"], recommendation["price_field"])
         assert price and price["label"] == "零售价", "Wrong price basis"
         assert recommendation["export_ppt_before_selection"] is False, "Exported PPT before user selection"
-        if recommendation["annotations"]:
-            pool.annotate(recommendation["annotations"])
-        created = selections.create(recommendation["ids"], [recommendation["price_field"]])
-        assert Path(created["html"]).is_file()
-        assert not selections.state(created["session_id"])["selected_ids"]
+        # These are independent requests. Recommendation edits must not invalidate
+        # the already-frozen fourth task's selection context.
+        trial = Pool(directory / 'recommendation-pool')
+        try:
+            trial.add(source)
+            if recommendation['annotations']:
+                trial.annotate(recommendation['annotations'])
+            trial_selections = Selections(trial)
+            created = trial_selections.create(recommendation['ids'], [recommendation['price_field']])
+            assert Path(created['html']).is_file()
+            assert not trial_selections.state(created['session_id'])['selected_ids']
+        finally:
+            trial.close()
     check("abstract_request_to_candidates", recommendation_case)
     def handoff_case():
         handoff = answer["handoff"]
