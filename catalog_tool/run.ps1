@@ -11,14 +11,12 @@ $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $source = (Resolve-Path -LiteralPath $InputFile).Path
 $config = (Resolve-Path -LiteralPath $ConfigFile).Path
 if (-not $OutputFile) {
-    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $OutputFile = Join-Path $projectRoot ("outputs\{0}-图册-{1}.pptx" -f [System.IO.Path]::GetFileNameWithoutExtension($source), $stamp)
+    $OutputFile = Join-Path $projectRoot 'outputs\产品图册.pptx'
 }
 $output = [System.IO.Path]::GetFullPath($OutputFile)
 if (-not $output.StartsWith($projectRoot + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw 'OutputFile must be inside the project directory.'
 }
-if (Test-Path -LiteralPath $output) { throw "Output already exists: $output" }
 $node = Join-Path $RuntimeRoot 'node\bin\node.exe'
 $python = Join-Path $RuntimeRoot 'python\python.exe'
 $modules = Join-Path $RuntimeRoot 'node\node_modules'
@@ -41,6 +39,7 @@ if (-not (Test-Path -LiteralPath $moduleLink)) {
 }
 $workDir = Join-Path $projectRoot ('.catalog-work\run-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $workDir -Force | Out-Null
+$stagedOutput = Join-Path $workDir 'staged\validated.pptx'
 $env:PYTHONIOENCODING = 'utf-8'
 $env:RUNTIME_NODE_MODULES = $modules
 $env:RUNTIME_NODE = $node
@@ -49,8 +48,26 @@ $env:RUNTIME_BIN_DIR = $bin
 $env:PRESENTATION_SKILL_DIR = $SkillDir
 & $python (Join-Path $PSScriptRoot 'extract.py') --input $source --work-dir $workDir
 if ($LASTEXITCODE -ne 0) { throw 'Workbook extraction failed.' }
-& $node (Join-Path $PSScriptRoot 'build.mjs') --source $source --work-dir $workDir --output $output --config $config --workspace-dir $projectRoot
+& $node (Join-Path $PSScriptRoot 'build.mjs') --source $source --work-dir $workDir --output $stagedOutput --config $config --workspace-dir $projectRoot
 if ($LASTEXITCODE -ne 0) { throw 'Presentation generation failed.' }
-& $python (Join-Path $PSScriptRoot 'verify.py') --work-dir $workDir --output $output
+& $python (Join-Path $PSScriptRoot 'verify.py') --work-dir $workDir --output $stagedOutput
 if ($LASTEXITCODE -ne 0) { throw 'Workbook to presentation verification failed.' }
+$outputDir = Split-Path -Path $output -Parent
+New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+if (Test-Path -LiteralPath $output) {
+    $previousFile = Join-Path $workDir 'previous.pptx'
+    [System.IO.File]::Replace($stagedOutput, $output, $previousFile)
+} else {
+    Move-Item -LiteralPath $stagedOutput -Destination $output
+}
+$resolvedWork = (Resolve-Path -LiteralPath $workDir).Path
+$workRoot = (Resolve-Path -LiteralPath (Join-Path $projectRoot '.catalog-work')).Path.TrimEnd('\') + '\'
+if (-not $resolvedWork.StartsWith($workRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Refusing to remove a work directory outside .catalog-work.'
+}
+$links = Get-ChildItem -LiteralPath $workDir -Recurse -Force | Where-Object {
+    $_.Attributes -band [System.IO.FileAttributes]::ReparsePoint
+}
+if ($links) { throw 'Refusing to remove a work directory that contains links.' }
+Remove-Item -LiteralPath $workDir -Recurse -Force
 Write-Output $output

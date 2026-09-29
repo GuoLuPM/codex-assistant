@@ -147,4 +147,4 @@ await finalizePresentation({ workspaceDir, candidatePath, finalPath, pythonExecu
   layoutArgs: ["--expected-slide-size-emu", "12192000,6572250", "--validate-heading-fit"],
   fontPolicy: { basis: "design", families: [font], scriptFonts: { ea: font } },
   verifyArtifactToolImport: true, receiptPath });
-console.log(`Built ${manifest.length} slides for ${products.length} products: ${finalPath}`);
+console.log(`Built ${manifest.length} slides for ${products.length} products`);

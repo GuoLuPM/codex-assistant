@@ -10,16 +10,16 @@
 .\catalog_tool\run.ps1 -InputFile '.\声顿产品报价表.xlsx'
 ```
 
-默认输出到 `outputs`，文件名带运行时间。也可以指定新的输出路径和配置：
+默认只输出 `outputs/产品图册.pptx`。再次运行时，脚本先生成并核对新文件，再替换旧文件；不会累积带时间戳的版本。也可以指定输出路径和配置：
 
 ```powershell
 .\catalog_tool\run.ps1 `
   -InputFile '.\声顿产品报价表.xlsx' `
-  -OutputFile '.\outputs\声顿产品图册-新版.pptx' `
+  -OutputFile '.\outputs\产品图册.pptx' `
   -ConfigFile '.\catalog_tool\sendem.json'
 ```
 
-输出路径须位于项目目录内，且不能与已有文件同名。输入表格需要一张工作表，包含“序号、产品名称、代理价、参考价B、功能特点、产品图片、包装图”这七个表头；表头可位于前 15 行，列顺序不限。图片须作为 Excel 嵌入图片锚定在对应产品行。
+输出路径须位于项目目录内。输入表格需要一张工作表，包含“序号、产品名称、代理价、参考价B、功能特点、产品图片、包装图”这七个表头；表头可位于前 15 行，列顺序不限。图片须作为 Excel 嵌入图片锚定在对应产品行。
 
 当前脚本使用本机 Codex 随附的 Node.js、Python、`@oai/artifact-tool` 和演示文稿校验器。`run.ps1` 会寻找这些依赖；如运行环境不同，可用 `-RuntimeRoot` 和 `-SkillDir` 指定位置。Python 运行时需具备 `openpyxl` 和 `python-pptx`。
 
