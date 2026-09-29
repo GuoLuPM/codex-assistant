@@ -9,6 +9,11 @@ from catalog_store import resolve_price
 from pool_store import encoded
 
 
+def validate_title(title):
+    if not isinstance(title, str) or not 1 <= len(title) <= 160 or not title.strip():
+        raise ValueError("Invalid selection title")
+
+
 class Selections:
     def __init__(self, pool):
         self.pool = pool
@@ -32,8 +37,7 @@ class Selections:
             raise ValueError("Choose 1..100 distinct candidate IDs")
         if not price_fields or len(price_fields) > 2 or len(price_fields) != len(set(price_fields)):
             raise ValueError("Choose 1..2 explicit customer-facing price fields")
-        if not isinstance(title, str) or not 1 <= len(title) <= 160:
-            raise ValueError("Invalid selection title")
+        validate_title(title)
         items = self.pool.details(ids, verify_fresh=True)
         snapshots = []
         for item in items:
@@ -66,6 +70,14 @@ class Selections:
         if not row:
             raise ValueError("Unknown selection session")
         return dict(row)
+
+    def rename(self, session_id, title):
+        validate_title(title)
+        with self.db:
+            updated = self.db.execute("UPDATE pool_sessions SET title=? WHERE id=?", (title, session_id))
+            if updated.rowcount != 1:
+                raise ValueError("Unknown selection session")
+        return {"session_id": session_id, "title": title}
 
     def state(self, session_id, include_items=False):
         session = self.session(session_id)

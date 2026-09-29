@@ -16,7 +16,7 @@ body{margin:0}
 .icon-button[data-active="true"]{background:#e5f0e8;border-color:var(--accent)}
 dialog{width:min(520px,calc(100% - 32px));max-height:calc(100% - 40px);padding:28px;border:1px solid #c9d6cc;border-radius:18px;color:#26352f;background:#fff;box-shadow:0 20px 70px #182b2330}
 dialog::backdrop{background:#20392d55}.dialog-heading{display:flex;align-items:center;justify-content:space-between;gap:18px}.dialog-heading h2{margin:0;font-size:26px}.dialog-heading .icon-button{border:0;width:44px;height:44px}
-.share-note{font-size:18px;line-height:1.7;color:#536359;margin:16px 0}.share-duration{margin:20px 0;font-size:20px}.duration-label{display:block;margin-bottom:12px}.duration-control{display:flex;gap:8px;align-items:center}.duration-control input{width:100%;text-align:center;min-width:0;font:inherit;font-size:22px;padding:12px 6px;border:1px solid #b9cabe;border-radius:8px}.duration-control button{flex-shrink:0}.duration-help{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;font-size:18px;color:#536359}.duration-help button{font:inherit;border:0;background:transparent;color:var(--accent);text-decoration:underline;cursor:pointer;min-height:44px;padding:8px}.share-footnote{margin:18px 0 0;font-size:16px;line-height:1.6;color:#536359}
+.share-duration{margin:20px 0;font-size:20px}.duration-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}.duration-label{display:block}.duration-heading button{font:inherit;font-size:18px;border:0;background:transparent;color:var(--accent);text-decoration:underline;cursor:pointer;min-height:44px;padding:8px}.duration-control{display:flex;gap:8px;align-items:center}.duration-control input{width:100%;text-align:center;min-width:0;font:inherit;font-size:22px;padding:12px 6px;border:1px solid #b9cabe;border-radius:8px}.duration-control button{flex-shrink:0}.share-footnote{margin:18px 0 0;font-size:16px;line-height:1.6;color:#536359}
 .duration-control button{font:inherit;font-size:26px}
 select,.share-link{font:inherit;font-size:18px;padding:12px;border:1px solid #b9cabe;border-radius:8px;min-width:0;background:#fff;color:inherit}
 .share-link{width:100%;margin:6px 0 16px}.share-message{font-size:20px;line-height:1.7;margin:20px 0 8px;overflow-wrap:anywhere}.share-expiry{font-size:18px;line-height:1.6;color:#536359;margin:0 0 18px}
@@ -76,10 +76,10 @@ h2{font-size:24px;font-weight:650;line-height:1.5;margin:0 0 12px;overflow-wrap:
 <body>
 <header class="topbar">
   <div class="heading">
-    <div class="heading-text"><h1 id="title">看看想选哪几款</h1><p id="instruction" class="instruction">点一下选中，再点一下取消。<br>选好后，回到聊天里告诉我“选好了”。</p></div>
+    <div class="heading-text"><h1 id="title">看看想选哪几款</h1><p id="instruction" class="instruction">选好后，回到聊天里告诉我“选好了”。</p></div>
     <div class="heading-actions"><div class="summary" aria-live="polite" aria-atomic="true">
       <p class="count">已选<strong id="selected-count">0</strong>款</p>
-      <p id="status" class="save-state" role="status">正在读取…</p>
+      <p id="status" class="save-state" role="status" hidden></p>
     </div><button id="share-open" class="icon-button" type="button" title="分享给别人看" aria-label="分享给别人看" hidden>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></svg>
     </button></div>
@@ -90,17 +90,15 @@ h2{font-size:24px;font-weight:650;line-height:1.5;margin:0 0 12px;overflow-wrap:
 <main id="products" aria-label="候选产品" aria-busy="true"></main>
 <dialog id="share-dialog" aria-labelledby="share-title">
   <div class="dialog-heading"><h2 id="share-title">分享商品</h2><button id="share-close" class="icon-button" type="button" aria-label="关闭分享窗口"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
-  <p class="share-note">别人只能查看本页商品和价格。</p>
   <div id="share-settings" class="share-duration">
-    <label class="duration-label" for="share-duration">有效时间</label>
-    <div class="duration-control"><button id="share-less" class="icon-button" type="button" aria-label="减少一小时">−</button><input id="share-duration" type="text" value="永久" maxlength="12" autocomplete="off" aria-describedby="duration-hint"><button id="share-more" class="icon-button" type="button" aria-label="增加一小时">＋</button></div>
-    <div class="duration-help"><span id="duration-hint">数字按小时计算</span><button id="share-forever" type="button">设为永久</button></div>
+    <div class="duration-heading"><label class="duration-label" for="share-duration">有效时间</label><button id="share-forever" type="button">设为永久</button></div>
+    <div class="duration-control"><button id="share-less" class="icon-button" type="button" aria-label="减少一小时">−</button><input id="share-duration" type="text" value="永久" maxlength="12" autocomplete="off"><button id="share-more" class="icon-button" type="button" aria-label="增加一小时">＋</button></div>
   </div>
   <p id="share-message" class="share-message" role="status" aria-live="polite">正在读取…</p>
   <p id="share-expiry" class="share-expiry" hidden></p>
   <input id="share-link" class="share-link" aria-label="分享链接" readonly hidden>
   <div class="share-buttons"><button id="share-copy" type="button" class="action-button primary" hidden>复制链接</button><button id="share-start" type="button" class="action-button primary" hidden>确认分享</button><button id="share-stop" type="button" class="action-button" hidden>停止分享</button></div>
-  <p class="share-footnote">分享时，电脑需保持开机联网。</p>
+  <p class="share-footnote">仅供查看，电脑需开机联网。</p>
 </dialog>
 <script>
 const base=location.pathname.replace(/\/?$/,'/');
@@ -111,11 +109,11 @@ let state, desired=new Set(), confirmed=new Set(), writing=false, locked=false, 
 
 function element(tag,text,cls){const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node}
 function dirty(){return desired.size!==confirmed.size||[...desired].some(id=>!confirmed.has(id))}
-function statusText(text,error=false){if(status.textContent!==text)status.textContent=text;status.dataset.status=error?'error':'saved'}
+function statusText(text,error=false){if(status.textContent!==text)status.textContent=text;status.hidden=!text;status.dataset.status=error?'error':'saved'}
 function message(text=''){notice.textContent=text;notice.hidden=!text}
 function syncControls(){for(const [id,check] of controls){check.checked=desired.has(id);const disabled=locked||state.state!=='open';if(check.disabled!==disabled)check.disabled=disabled}document.querySelector('#selected-count').textContent=desired.size}
 function adopt(saved){state.revision=saved.revision;state.state=saved.state;confirmed=new Set(saved.selected_ids);desired=new Set(confirmed);syncControls()}
-function settledStatus(){statusText(state.state==='sealed'?'已经选好了':state.state==='closed'?'这次选择已结束':'选择会自动保存')}
+function settledStatus(){statusText(state.state==='sealed'?'已经选好了':state.state==='closed'?'这次选择已结束':'')}
 function syncDetailsToggle(){detailsToggle.textContent=detailsPanels.length&&detailsPanels.every(panel=>panel.open)?'全部收起':'全部展开'}
 detailsToggle.addEventListener('click',()=>{
   const open=!detailsPanels.every(panel=>panel.open);

@@ -111,6 +111,9 @@ def main(argv=None):
     choose.add_argument("--title", default="请选择产品")
     for name in ("selection", "open", "close", "serve"):
         commands.add_parser(name).add_argument("--session", required=True)
+    rename = commands.add_parser("rename", help="Change a selection title without changing candidates or choices")
+    rename.add_argument("--session", required=True)
+    rename.add_argument("--title", required=True)
     stage = commands.add_parser("stage", help="Internal: source-verified data for the shared PPT builder")
     stage.add_argument("--ids", nargs="+", required=True)
     stage.add_argument("--work-dir", type=Path, required=True)
@@ -213,6 +216,8 @@ def main(argv=None):
             result = Selections(pool).create(args.ids, args.price_fields, args.title)
         elif args.command == "selection":
             result = Selections(pool).state(args.session)
+        elif args.command == "rename":
+            result = Selections(pool).rename(args.session, args.title)
         elif args.command == "open":
             from pool_server import open_session
             result = open_session(args.index_dir, args.session)

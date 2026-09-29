@@ -39,6 +39,23 @@ class SelectionTests(unittest.TestCase):
         self.pool.close()
         self.tmp.cleanup()
 
+    def test_rename_preserves_candidates_choices_and_revision(self):
+        self.selections.select(self.session, self.ids[:1], 0)
+        before = self.selections.state(self.session, include_items=True)
+        other = self.selections.create(self.ids, ["零售价"], title="另一次选品")["session_id"]
+        result = self.selections.rename(self.session, "新标题")
+        self.assertEqual(result, {"session_id": self.session, "title": "新标题"})
+        self.assertEqual(self.selections.state(self.session, include_items=True), {**before, "title": "新标题"})
+        self.assertEqual(self.selections.state(other)["title"], "另一次选品")
+        for title in (None, "", "   ", "长" * 161):
+            with self.assertRaisesRegex(ValueError, "title"):
+                self.selections.rename(self.session, title)
+        with self.assertRaisesRegex(ValueError, "Unknown"):
+            self.selections.rename("missing", "新标题")
+        self.assertEqual(self.selections.state(self.session, include_items=True), {**before, "title": "新标题"})
+        self.selections.select(self.session, self.ids, before["revision"])
+        self.assertEqual(self.selections.state(self.session)["selected_ids"], self.ids)
+
     def test_persistence_cross_session_revision_and_empty_export(self):
         with self.assertRaisesRegex(ValueError, "No products"):
             self.selections.seal(self.session)
