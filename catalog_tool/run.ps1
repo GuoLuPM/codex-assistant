@@ -14,10 +14,14 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+. (Join-Path $projectRoot 'scripts\environment.ps1')
+$environmentConfig = Read-AssistantEnvironment $projectRoot
+if (-not $RuntimeRoot) { $RuntimeRoot = $environmentConfig['runtime_root'] }
+if (-not $SkillDir) { $SkillDir = $environmentConfig['presentations_skill'] }
 if (-not $RuntimeRoot) {
     $RuntimeRoot = Join-Path $env:USERPROFILE '.cache\codex-runtimes\codex-primary-runtime\dependencies'
 }
-$projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if ($InputFile) { $source = (Resolve-Path -LiteralPath $InputFile).Path }
 if (-not $ConfigFile) {
     $ConfigFile = Join-Path $projectRoot 'style.local.json'

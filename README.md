@@ -2,6 +2,8 @@
 
 供 Codex 调用的本地工具库。用户描述需求，Codex 找到能力、读取必要说明并调用脚本。脚本处理确定性工作，完整业务数据留在本机。
 
+新 Windows 可直接下载 [Releases 安装包](https://github.com/GuoLuPM/codex-assistant/releases/latest)，包含独立 Python 和基础依赖；[对接文档与转发提示词](docs/WINDOWS_RELEASE.md) 说明如何接通本机 Codex 的 PPT 组件。
+
 ```powershell
 ./assistant.ps1 list --query '产品池'
 ./assistant.ps1 describe pool
@@ -25,6 +27,6 @@
 | 了解路线评估或接入新能力 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | 确有必要的子代理分工 | [AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md) |
 
-入口与发现只需 Python 3.11+ 标准库，不读取业务数据；每个工具自行声明依赖。PowerShell 启动器按 `ASSISTANT_PYTHON` → Codex 运行时 Python → PATH Python 选择，显式配置错误直接报错。`doctor` 只检查入口环境，不代表某项工具的依赖齐全。
+入口与发现只需 Python 3.11+ 标准库，不读取业务数据；每个工具自行声明依赖。PowerShell 启动器按 `ASSISTANT_PYTHON` → 项目本机配置 → Codex 运行时 Python → PATH Python 选择，显式配置错误直接报错。`doctor` 只检查入口环境，不代表某项工具的依赖齐全。
 
 `data/`、产出、私有映射、索引和本地配置不进 Git。仓库地址：[GuoLuPM/codex-assistant](https://github.com/GuoLuPM/codex-assistant)。本地文件夹可自由命名。

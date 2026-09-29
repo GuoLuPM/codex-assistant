@@ -4,13 +4,15 @@
 
 ## 取得工程
 
+- 新电脑优先使用 [Releases 的 Windows x64 安装包](https://github.com/GuoLuPM/codex-assistant/releases/latest)，包内含 Python 和基础依赖、校验清单及安装器；对接步骤和可转发提示词见 [Windows Release 对接](WINDOWS_RELEASE.md)。PDF 在目标机器下载，PPT 对接目标机器自己的 Codex 组件。
+
 - 公开仓库 `https://github.com/GuoLuPM/codex-assistant`，不需要 GitHub 账号登录。优先 `git clone https://github.com/GuoLuPM/codex-assistant.git D:\code\assistant`。
 - 没有 Git：优先找 Codex 随附 Git；也可下载仓库默认分支 ZIP 解压。无 Git 仍可本地运行，公开历史检查与代码同步需要 Git。安装工具时以官方来源和当前设备为准。
-- 在 Codex 打开实际项目目录并读根 AGENTS。不要复制旧机器的 node_modules、虚拟环境或临时构建目录。
+- 在 Codex 打开实际项目目录并读根 AGENTS。不要复制旧机器的 node_modules、虚拟环境或临时构建目录；发行包里的环境来自锁定并校验过的官方安装材料。
 
 ## 入口与检索环境
 
-入口发现只用 Python 3.11+ 标准库。Windows `assistant.ps1` 的顺序：显式 `ASSISTANT_PYTHON` → 指定/默认 Codex Runtime 的 Python → PATH Python。显式路径无效就报错，不悄悄换环境。
+入口发现只用 Python 3.11+ 标准库。Windows `assistant.ps1` 的顺序：显式 `ASSISTANT_PYTHON` → 项目 `environment.local.json` 的 python → 指定/本地配置/默认 Codex Runtime 的 Python → PATH Python。显式路径无效就报错，不悄悄换环境。安装器/`scripts/configure_windows.py` 写本机配置，它不进入 Git 或公开包。
 
 ```powershell
 # 使用 D 盘已有 Python / venv 的示意路径；先核对文件存在
