@@ -88,4 +88,7 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    # The Codex-facing JSON interface uses UTF-8 even on non-Chinese Windows hosts.
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     sys.exit(main())

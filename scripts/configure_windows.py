@@ -59,16 +59,16 @@ def configure(project, python=None, runtime_root=None, skill_dir=None):
         base = profile / '.codex/plugins/cache/openai-primary-runtime/presentations'
         versions = sorted((p for p in base.glob('*') if p.is_dir()), key=lambda p: tuple(int(x) for x in re.findall(r'\d+', p.name)), reverse=True)
         if versions: selected_skill = versions[0] / 'skills/presentations'
-    skill = Path(selected_skill).resolve() if selected_skill else None
+    skill = Path(selected_skill).absolute() if selected_skill else None
     missing = [name for name in ('python/python.exe', 'node/bin/node.exe', 'node/node_modules/@oai/artifact-tool/package.json') if not (root / name).is_file()]
     if not skill or not (skill / 'container_tools/artifact_tool_utils.mjs').is_file(): missing.append('presentations skill')
     if not missing:
-        try: probe_ppt(root.resolve(), skill)
+        try: probe_ppt(root.resolve(), skill.resolve())
         except ValueError as error: missing.append(str(error))
     if missing and (runtime_root or skill_dir or os.environ.get('ASSISTANT_RUNTIME_ROOT') or os.environ.get('ASSISTANT_PRESENTATIONS_SKILL') or config.get('runtime_root') or config.get('presentations_skill')):
         raise ValueError('Configured PPT paths unusable; existing configuration preserved: ' + ', '.join(missing))
     config.update(version=1, python=str(python))
-    if not missing: config.update(runtime_root=str(root.resolve()), presentations_skill=str(skill))
+    if not missing: config.update(runtime_root=str(root.absolute()), presentations_skill=str(skill))
     temporary = project / 'environment.local.json.tmp'
     temporary.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding='utf-8')
     temporary.replace(config_path)

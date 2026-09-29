@@ -14,6 +14,8 @@
 
 入口发现只用 Python 3.11+ 标准库。Windows `assistant.ps1` 的顺序：显式 `ASSISTANT_PYTHON` → 项目 `environment.local.json` 的 python → 指定/本地配置/默认 Codex Runtime 的 Python → PATH Python。显式路径无效就报错，不悄悄换环境。安装器/`scripts/configure_windows.py` 写本机配置，它不进入 Git 或公开包。
 
+配置重试保留用户选择的解释器、运行时和技能路径；不会把 Python 链接转换成底层解释器，以免跨出虚拟环境。入口输出固定为 UTF-8，英文 Windows 也能读取中文工具说明。
+
 ```powershell
 # 使用 D 盘已有 Python / venv 的示意路径；先核对文件存在
 $env:ASSISTANT_PYTHON = 'D:\tools\assistant-venv\Scripts\python.exe'

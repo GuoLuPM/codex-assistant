@@ -1,10 +1,12 @@
 import json
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -40,6 +42,13 @@ class AssistantTests(unittest.TestCase):
         self.assertIn("--max-cells", result.stdout)
         result = self.run_cli("run", "catalog", "--unknown-argument")
         self.assertEqual(result.returncode, 2)
+
+    def test_chinese_discovery_is_utf8_on_an_english_windows_console(self):
+        with patch.dict(os.environ, {'PYTHONIOENCODING': 'cp1252'}):
+            result = self.run_cli('list', '--query', '产品池')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['items'][0]['id'], 'pool')
+        self.assertIn('持续加入', result.stdout)
 
     def test_ppt_is_available_through_catalog_entry(self):
         result = self.run_cli("run", "catalog", "ppt", "--help")

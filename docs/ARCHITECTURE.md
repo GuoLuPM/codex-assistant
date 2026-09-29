@@ -44,7 +44,7 @@ flowchart LR
 
 - `assistant.py` 只负责发现和分发：`list`（默认 10、最多 50、query/offset）、`describe ID`（只返回登记）、`run ID ...`（保留参数与失败状态）、`doctor`（只检查入口）。不导入工具模块、不读业务数据、不猜路由。
 - `tools.json` 是唯一能力目录：`version:1`；每项只含 `id/summary/tags/entrypoint/guide`。summary 最多 160 字符、tags 最多 12 项；路径必须指向项目内文件。
-- 入口以项目为 cwd，用当前 Python 启动登记的 CLI，不拼 shell 字符串。其他语言通过能力自己的 Python 薄适配器调用。返回退出码和有界结果；完整文件留在本地。
+- 入口以项目为 cwd，用当前 Python 启动登记的 CLI，不拼 shell 字符串。其他语言通过能力自己的 Python 薄适配器调用。返回退出码和有界 UTF-8 JSON，不依赖 Windows 系统语言；完整文件留在本地。
 - `catalog.py ppt` 仅通过 JSON 数据参数调用已有 `run.ps1`，后者仍唯一负责暂存、构建、校验和替换；不再实现一套 PPT 管线。
 - `pool` 用原件哈希和记录定位保存长期产品，不依赖上传文件继续存在；选择页只保存选中项，语义判断仍由 Codex 承担。新增数据管理合同见 [产品池](PRODUCT_POOL.md)。
 - `scripts/audit_public.py` 是共享发布检查；业务能力不拥有仓库发布语义。历史命令保留兼容入口。

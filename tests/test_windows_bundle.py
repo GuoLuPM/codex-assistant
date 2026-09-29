@@ -124,7 +124,7 @@ class BundleTests(unittest.TestCase):
         result = subprocess.run(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(project / 'assistant.ps1'), 'doctor'],
                                 cwd=self.root, env=environment, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(str(project).replace('\\', '\\\\').encode(), result.stdout)
+        self.assertEqual(Path(json.loads(result.stdout)['project']).resolve(), project.resolve())
         environment['ASSISTANT_PYTHON'] = str(project / 'missing.exe')
         result = subprocess.run(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(project / 'assistant.ps1'), 'doctor'],
                                 cwd=self.root, env=environment, capture_output=True)
