@@ -1,14 +1,23 @@
+[CmdletBinding(DefaultParameterSetName = 'Source')]
 param(
-    [Parameter(Mandatory = $true)][string]$InputFile,
+    [Parameter(Mandatory = $true, ParameterSetName = 'Source')][string]$InputFile,
+    [Parameter(Mandatory = $true, ParameterSetName = 'Selection')][string[]]$ProductIds,
     [string]$OutputFile,
-    [string]$ConfigFile = (Join-Path $PSScriptRoot 'sendem.json'),
+    [string]$ConfigFile,
+    [string]$CatalogConfigFile,
+    [string]$IndexDir = (Join-Path $PSScriptRoot '..\.catalog-index'),
+    [string[]]$PriceFields,
     [string]$RuntimeRoot = (Join-Path $env:USERPROFILE '.cache\codex-runtimes\codex-primary-runtime\dependencies'),
     [string]$SkillDir
 )
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$source = (Resolve-Path -LiteralPath $InputFile).Path
+if ($InputFile) { $source = (Resolve-Path -LiteralPath $InputFile).Path }
+if (-not $ConfigFile) {
+    $ConfigFile = Join-Path $projectRoot 'style.local.json'
+    if (-not (Test-Path -LiteralPath $ConfigFile)) { $ConfigFile = Join-Path $PSScriptRoot 'style.json' }
+}
 $config = (Resolve-Path -LiteralPath $ConfigFile).Path
 if (-not $OutputFile) {
     $OutputFile = Join-Path $projectRoot 'outputs\产品图册.pptx'
@@ -46,9 +55,20 @@ $env:RUNTIME_NODE = $node
 $env:RUNTIME_PYTHON = $python
 $env:RUNTIME_BIN_DIR = $bin
 $env:PRESENTATION_SKILL_DIR = $SkillDir
-& $python (Join-Path $PSScriptRoot 'extract.py') --input $source --work-dir $workDir
-if ($LASTEXITCODE -ne 0) { throw 'Workbook extraction failed.' }
-& $node (Join-Path $PSScriptRoot 'build.mjs') --source $source --work-dir $workDir --output $stagedOutput --config $config --workspace-dir $projectRoot
+$catalogScript = Join-Path $PSScriptRoot 'catalog.py'
+$catalogArgs = @('--index-dir', $IndexDir)
+if ($CatalogConfigFile) { $catalogArgs += @('--config', $CatalogConfigFile) }
+if ($InputFile) {
+    & $python $catalogScript @catalogArgs index $source
+    if ($LASTEXITCODE -ne 0) { throw 'Source indexing failed.' }
+    $stageArgs = @('stage-source', '--input', $source, '--work-dir', $workDir)
+} else {
+    $stageArgs = @('stage', '--ids') + $ProductIds + @('--work-dir', $workDir)
+}
+if ($PriceFields) { $stageArgs += @('--price-fields') + $PriceFields }
+& $python $catalogScript @catalogArgs @stageArgs
+if ($LASTEXITCODE -ne 0) { throw 'Product selection or source verification failed.' }
+& $node (Join-Path $PSScriptRoot 'build.mjs') --work-dir $workDir --output $stagedOutput --config $config --workspace-dir $projectRoot
 if ($LASTEXITCODE -ne 0) { throw 'Presentation generation failed.' }
 & $python (Join-Path $PSScriptRoot 'verify.py') --work-dir $workDir --output $stagedOutput
 if ($LASTEXITCODE -ne 0) { throw 'Workbook to presentation verification failed.' }

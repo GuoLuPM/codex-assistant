@@ -10,14 +10,13 @@ function args() {
     if (!key?.startsWith("--") || !process.argv[i + 1]) throw new Error(`Invalid argument: ${key}`);
     result[key.slice(2)] = process.argv[i + 1];
   }
-  for (const key of ["source", "work-dir", "output", "config", "workspace-dir"]) {
+  for (const key of ["work-dir", "output", "config", "workspace-dir"]) {
     if (!result[key]) throw new Error(`Missing --${key}`);
   }
   return result;
 }
 
 const options = args();
-const source = path.resolve(options.source);
 const workDir = path.resolve(options["work-dir"]);
 const finalPath = path.resolve(options.output);
 const workspaceDir = path.resolve(options["workspace-dir"]);
@@ -33,7 +32,6 @@ const { resolvePresentationFont, finalizePresentation } = await import(
   pathToFileURL(path.join(skillDir, "container_tools/artifact_tool_utils.mjs")).href
 );
 const font = resolvePresentationFont({ fontFamily: "Microsoft YaHei" });
-const brand = String(config.brand ?? "").trim();
 const accent = String(config.brandColor ?? "#17345A");
 const placeholderHashes = new Set(config.placeholderProductImageSha256 ?? []);
 const presentation = Presentation.create({ slideSize: { width: 1280, height: 690 } });
@@ -79,6 +77,9 @@ function featurePages(text, capacity = 31.5) {
 function mime(imagePath) { return imagePath.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg"; }
 
 for (const item of products) {
+  const brand = String(item.brand || config.brand || "").trim();
+  const prices = item.display_prices ?? Object.values(item.prices ?? {});
+  if (!prices.length || prices.length > 2) throw new Error(`Choose 1 or 2 displayed prices for ${item.id}`);
   const placeholder = placeholderHashes.has(item.product_image_sha256);
   const mainImage = (placeholder ? null : item.product_image) ?? item.package_image;
   const thumbImage = item.package_image && item.package_image !== mainImage ? item.package_image : null;
@@ -90,15 +91,18 @@ for (const item of products) {
     const lineCount = pages[page].split("\n").length;
     const panelHeight = Math.min(519, Math.max(hasImage ? 320 : 260, 120 + lineCount * 26));
     const slide = presentation.slides.add();
-    manifest.push({ slide: presentation.slides.items.length, source_row: item.row,
+    manifest.push({ slide: presentation.slides.items.length, product_id: item.id, source_row: item.row,
       part: page + 1, parts: pages.length,
       image_source: mainImage === item.package_image ? "package_image" : mainImage ? "product_image" : null });
     slide.background.fill = "#FFFFFF";
     if (thumbImage) slide.images.add({ blob: await fs.readFile(thumbImage), contentType: mime(thumbImage),
       alt: `包装图：${item.name}`, fit: "contain", position: { left: 30, top: 29, width: 104, height: 104 } });
-    const title = String(item.name).replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+    let title = String(item.name).replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+    if (item.model != null && String(item.model).trim() && !title.includes(String(item.model))) {
+      title += ` / ${String(item.model).replace(/\s+/g, " ").trim()}`;
+    }
     addText(slide, title, { left: thumbImage ? 155 : 30, top: 28,
-      width: thumbImage ? 825 : 950, height: 108 }, 34, { bold: true });
+      width: hasImage ? (thumbImage ? 825 : 950) : 730, height: 108 }, 34, { bold: true });
     if (brand) addText(slide, brand, { left: 1000, top: 15, width: 250, height: 47 }, 30,
       { bold: true, color: accent, align: "right" });
     slide.shapes.add({ geometry: "rect", position: { left: 20, top: 151,
@@ -117,18 +121,16 @@ for (const item of products) {
       position: { left: 785, top: 110, width: 470, height: 470 } });
     slide.shapes.add({ geometry: "rect", position: { left: 815, top: hasImage ? 590 : 69,
       width: 435, height: 73 }, fill: accent, line: { fill: "none", width: 0 } });
-    const agent = item.agent_price == null || String(item.agent_price).trim() === ""
-      ? "未提供" : String(item.agent_price);
-    const reference = item.reference_price_b == null || String(item.reference_price_b).trim() === ""
-      ? "未提供" : String(item.reference_price_b);
-    addText(slide, `代理价  ${agent}\n参考价B  ${reference}`,
+    const priceText = prices.map(({ label, value }) => `${label}  ${value == null || String(value).trim() === "" ? "未提供" : String(value)}`).join("\n");
+    addText(slide, priceText,
       { left: 834, top: hasImage ? 597 : 76, width: 396, height: 59 }, 22,
       { color: "#FFFFFF", align: "right" });
     const cells = item.source_cells;
     slide.speakerNotes.textFrame.setText(
-      `来源：${path.basename(source)}；工作表：${item.sheet}；第${item.row}行。` +
-      `序号：${cells["序号"]}；产品名称：${cells["产品名称"]}；代理价：${cells["代理价"]}；参考价B：${cells["参考价B"]}；` +
-      `功能特点：${cells["功能特点"]}；产品图片：${cells["产品图片"]}；包装图：${cells["包装图"]}。` +
+      `来源：${item.source_file}；工作表：${item.sheet}；第${item.row}行；产品ID：${item.id}。` +
+      Object.entries(cells).map(([label, cell]) => `${label}：${cell}`).join("；") + "。" +
+      `源文件SHA256：${item.source_hash}。` +
+      (item.issues?.length ? `源数据提示：${item.issues.join("；")}。` : "") +
       `功能特点第${page + 1}/${pages.length}页。` +
       (placeholder ? "产品图片列是占位图，展示包装图列图片。" : "")
     );

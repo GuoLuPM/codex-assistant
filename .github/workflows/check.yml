@@ -1,0 +1,17 @@
+name: Check catalogue core
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r catalog_tool/requirements.txt
+      - run: python -m unittest discover -s catalog_tool/tests -v
+      - run: python catalog_tool/audit_public.py
