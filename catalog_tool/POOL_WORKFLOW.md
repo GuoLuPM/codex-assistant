@@ -5,7 +5,7 @@
 ## 用户交付文件
 
 1. `add 路径` 按文件内容哈希保存原件。`duplicate` 表示已存在，不重新抽取；同名但内容不同会累积加入。`files` 分页查看 `ready/partial/pending`，不要把 pending 当作产品已入库。
-2. XLSX 自动入库或返回 `needs_mapping`；异形表读 [来源映射](../docs/SOURCE_MAPPING.md)，借原 `catalog inspect` 看坐标，然后 `add 路径 --map 私有映射.local.json`。禁止为文件名/品牌写解析分支。
+2. XLSX 自动入库或返回 `needs_mapping`；自动识别有跳过的工作表时，保留原件但不提交部分产品或声称整份完成。异形表读 [来源映射](../docs/SOURCE_MAPPING.md)，借原 `catalog inspect` 看坐标，补齐全部工作表映射（确实无需导入的表显式列入 `ignore_sheets`），然后 `add 路径 --map 私有映射.local.json`。禁止为文件名/品牌写解析分支。
 3. PDF / PPTX / DOCX / TXT / CSV / XLS 等：`inspect --file 文件ID --limit 20` 看有界证据；按 `--page` / `--ref` / `--text-offset` 深读。Codex 判断产品粒度，按 [入库合同](../docs/POOL_IMPORT.md) 写私有 JSON，再 `import --file 文件ID --records 文件.local.json`；可每次只加一款，同一来源定位重试不重复。
 4. 图片/扫描件先看原图；PDF 可 `render --file 文件ID --page 1`。逐字观察后 `observe` 留显式视觉转录，再引用其 ref。无法识别的价格不猜；视觉转录与原生文字验证区分标记。`.doc` 等不支持格式先明确转换，不能当空表成功。
 5. 新增记录后入口自动整理原文明确标注的品牌/规格。`quality --price-field 实际价格字段` 核对缺失及覆盖；旧库可 `derive`。需要补分类/品牌、修正检索资料或管理新旧报价，读 [资料与检索合同](../docs/POOL_RETRIEVAL.md)。缺价格或图片仍可入库，同名新文件不自动覆盖旧报价。

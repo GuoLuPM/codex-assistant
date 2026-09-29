@@ -160,16 +160,26 @@ def evaluate(codex, model, directory, feedback_from=None):
     finally: pool.close()
 
 
-if __name__ == '__main__':
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--codex', type=Path, required=True)
     parser.add_argument('--work-dir', type=Path, required=True)
     parser.add_argument('--models', nargs='+', default=['gpt-6-sol', 'gpt-5.6-terra'])
     parser.add_argument('--feedback-from', type=Path, help='Previous private experiment directory; allow one actual-check recovery')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    failed = False
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         jobs = {executor.submit(evaluate, args.codex, m, args.work_dir / m, args.feedback_from): m for m in args.models}
         for job in concurrent.futures.as_completed(jobs):
             try: outcome = job.result()
             except Exception as error: outcome = {'model': jobs[job], 'error': str(error)}
             print(json.dumps(outcome, ensure_ascii=False), flush=True)
+            failed |= (bool(outcome.get('error')) or not outcome.get('total')
+                       or outcome.get('passed') != outcome['total']
+                       or len(outcome.get('checks', {})) != outcome['total']
+                       or any(value is not True for value in outcome['checks'].values()))
+    return 1 if failed else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

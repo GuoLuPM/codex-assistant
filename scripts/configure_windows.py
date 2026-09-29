@@ -44,7 +44,8 @@ def configure(project, python=None, runtime_root=None, skill_dir=None):
         raise ValueError('Unsupported environment.local.json; existing configuration preserved')
     if config_path.exists() and not config.get('python'):
         raise ValueError('Existing configuration has no Python path; inspect it before retrying')
-    python = Path(python or os.environ.get('ASSISTANT_PYTHON') or config.get('python') or sys.executable).resolve()
+    # Preserve interpreter links: resolving a venv's python can select its base environment.
+    python = Path(python or os.environ.get('ASSISTANT_PYTHON') or config.get('python') or sys.executable).absolute()
     if not (project / 'assistant.py').is_file() or not python.is_file():
         raise ValueError('Project or Python executable missing')
     probe = subprocess.run([str(python), '-B', '-c', 'import sys,sqlite3; assert sys.version_info >= (3,11); c=sqlite3.connect(":memory:"); c.execute("create virtual table t using fts5(x)"); print("ok")'],

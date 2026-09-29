@@ -55,6 +55,30 @@ class PoolTests(unittest.TestCase):
         self.assertEqual(len(self.store.details([first], verify_fresh=True)), 1)
         self.store.stage([first], self.root / "stage", ["零售价"])
 
+    def test_unrecognized_sheet_requires_review_before_file_is_ready(self):
+        book = Workbook()
+        book.active.title = "产品"
+        book.active.append(["名称", "零售价"])
+        book.active.append(["合成杯子", 88])
+        other = book.create_sheet("待核对")
+        other.append(["物件", "报价说明"])
+        other.append(["另一款合成商品", "报价需另行核对"])
+        book.save(self.source)
+        result = self.store.add(self.source)
+        self.assertEqual(result["status"], "needs_mapping")
+        self.assertEqual(result["skipped_sheets"], ["待核对"])
+        self.assertEqual(self.store.document(result["file_id"])["status"], "pending")
+        self.assertEqual(self.store.stats()["products"], 0)
+        mapping = self.root / "map.json"
+        mapping.write_text(json.dumps({"version": 1, "ignore_sheets": ["待核对"], "tables": [{
+            "sheet": "产品", "range": "A2:B2", "header_row": 1, "extend_rows": True,
+            "fields": {"name": "A"}, "prices": {"retail_price": "B"},
+            "expect": {"A1": "名称", "B1": "零售价"}}]}), encoding="utf-8")
+        reviewed = self.store.add(self.source, mapping)
+        self.assertEqual(reviewed["status"], "ready")
+        self.assertEqual(reviewed["products_added"], 1)
+        self.assertEqual(self.store.add(self.source)["status"], "duplicate")
+
     def test_semantic_tags_are_evidenced_and_filter_with_price(self):
         self.store.add(self.source)
         product = self.store.search()["items"][0]["id"]

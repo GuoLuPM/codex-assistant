@@ -152,12 +152,13 @@ def evaluate(codex, model, directory):
             "repair_rounds": int(bool(failed)), "passed": sum(v is True for v in checks.values()), "total": len(checks), "checks": checks}
 
 
-if __name__ == "__main__":
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--codex", type=Path, required=True)
     parser.add_argument("--models", nargs="+", default=["gpt-6-luna", "gpt-5.6-terra", "gpt-6-sol"])
     parser.add_argument("--work-dir", type=Path, required=True)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    failed = False
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
         jobs = {executor.submit(evaluate, args.codex, model, args.work_dir.resolve() / model): model for model in args.models}
         for job in concurrent.futures.as_completed(jobs):
@@ -166,3 +167,12 @@ if __name__ == "__main__":
             except Exception as error:
                 outcome = {"model": jobs[job], "error": str(error)}
             print(json.dumps(outcome, ensure_ascii=False), flush=True)
+            failed |= (bool(outcome.get("error")) or not outcome.get("total")
+                       or outcome.get("passed") != outcome["total"]
+                       or len(outcome.get("checks", {})) != outcome["total"]
+                       or any(value is not True for value in outcome["checks"].values()))
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

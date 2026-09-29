@@ -163,6 +163,11 @@ class Pool(Catalog):
         except ValueError as error:
             return {"file_id": file_id, "status": "needs_mapping", "products_added": 0,
                     "diagnostic": str(error)[:600], "next": "inspect XLSX and add again with --map"}
+        if skipped and not schema.get("mapping"):
+            return {"file_id": file_id, "status": "needs_mapping", "products_added": 0,
+                    "skipped_sheets": skipped,
+                    "diagnostic": "Some sheets were not recognized; file completeness has not been confirmed",
+                    "next": "inspect all skipped sheets, then provide a complete --map with explicit ignore_sheets if appropriate"}
         pairs = []
         for item in items:
             key = encoded([item["sheet"], item["row"], item["source_cells"], item.get("variant")])

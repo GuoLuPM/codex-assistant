@@ -93,7 +93,19 @@ class BundleTests(unittest.TestCase):
         self.assertTrue(result['base_ready'])
         self.assertFalse(result['ppt_ready'])
         self.assertTrue(result['ppt_missing'])
-        self.assertEqual(json.loads((project / 'environment.local.json').read_text(encoding='utf-8')), {'version': 1, 'python': str(Path(sys.executable).resolve())})
+        self.assertEqual(json.loads((project / 'environment.local.json').read_text(encoding='utf-8')), {'version': 1, 'python': str(Path(sys.executable).absolute())})
+
+    @unittest.skipIf(os.name == 'nt', 'POSIX interpreter links')
+    def test_configured_python_link_is_not_replaced_by_its_base_interpreter(self):
+        project = self.bundle / 'application'
+        interpreter = self.root / 'python-link'
+        interpreter.symlink_to(sys.executable)
+        environment = {key: value for key, value in os.environ.items() if not key.startswith('ASSISTANT_')}
+        environment['USERPROFILE'] = str(self.root / 'new user')
+        with patch.dict(os.environ, environment, clear=True):
+            result = configure(project, interpreter)
+        self.assertEqual(result['python'], str(interpreter))
+        self.assertEqual(json.loads((project / 'environment.local.json').read_text(encoding='utf-8'))['python'], str(interpreter))
 
     @unittest.skipUnless(os.name == 'nt', 'PowerShell launcher integration')
     def test_launcher_uses_local_config_from_another_working_directory(self):
