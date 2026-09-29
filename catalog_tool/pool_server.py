@@ -106,6 +106,9 @@ def open_session(root, session_id):
     finally:
         pool.close()
     directory = root / "sessions" / session_id
+    # Refresh the view on reopen; frozen candidates/prices and saved choices stay in SQLite.
+    template = Path(__file__).with_name("pool_select.html").read_text(encoding="utf-8")
+    (directory / "index.html").write_text(template, encoding="utf-8")
     path = directory / "server.local.json"
     if path.is_file():
         state = json.loads(path.read_text(encoding="utf-8"))

@@ -1,31 +1,161 @@
 <!doctype html>
 <html lang="zh-CN">
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>选择产品</title>
 <style>
-:root{font-family:"Microsoft YaHei",system-ui,sans-serif;color:#182c42;background:#f5f7fa;font-size:15px}*{box-sizing:border-box}body{margin:0}header{background:white;border-bottom:1px solid #dce3eb;padding:28px max(24px,calc((100vw - 1080px)/2));position:sticky;top:0;z-index:2}h1{font-size:26px;margin:0 0 8px;font-weight:650}p{margin:0;color:#5d6c7e;line-height:1.6}.status{margin-top:12px;font-size:14px;color:#1b6353;min-height:23px}.error{color:#aa302d}main{max-width:1080px;margin:24px auto;padding:0 24px 48px;display:grid;gap:16px}.product{display:grid;grid-template-columns:28px 164px 1fr;gap:24px;padding:24px;background:white;border:2px solid transparent;border-radius:10px;cursor:pointer;align-items:start}.product:has(input:checked){border-color:#235ca4;background:#f5f9ff}.product:focus-within{outline:2px solid #799ac5;outline-offset:3px}input{width:23px;height:23px;accent-color:#235ca4;margin:3px 0}.picture{width:164px;height:154px;object-fit:contain;background:#fff}.no-image{display:grid;place-items:center;color:#8994a3;background:#f1f3f6}.content{min-width:0}h2{font-size:19px;line-height:1.45;margin:0 0 10px;overflow-wrap:anywhere}.prices{font-size:18px;color:#1b4f8f;margin-bottom:12px;font-weight:600}.facts{white-space:pre-line;line-height:1.7;color:#435369;overflow-wrap:anywhere}.reason{margin-top:12px;padding-top:12px;border-top:1px solid #e3e8f0;font-size:13px;color:#52647a}.source{font-size:12px;color:#8993a2;margin-top:12px;overflow-wrap:anywhere}@media(max-width:600px){header{padding:20px}main{padding:0 14px}.product{grid-template-columns:25px 80px 1fr;gap:12px;padding:16px}.picture{width:80px;height:90px}h2{font-size:17px}.prices{font-size:16px}}
-.reason{white-space:pre-line}@media(max-width:600px){.product{grid-template-columns:25px 1fr}.picture{width:120px;height:110px}.content{grid-column:1/-1}}
+:root{font-family:system-ui,"Microsoft YaHei",sans-serif;color:#26352f;background:#f6f7f5;font-size:14px;--accent:#346b57}
+*{box-sizing:border-box}
+body{margin:0}
+.topbar{position:sticky;top:0;z-index:2;background:#f6f7f5;border-bottom:1px solid #e3e7e2}
+.heading{max-width:1080px;margin:auto;padding:26px 28px 22px;display:flex;align-items:center;justify-content:space-between;gap:28px}
+h1{font-size:25px;line-height:1.4;letter-spacing:.01em;margin:0 0 8px;font-weight:650;overflow-wrap:anywhere}
+.instruction{margin:0;color:#707b74;font-size:13px;line-height:1.65}
+.summary{flex-shrink:0;width:130px;text-align:right;font-variant-numeric:tabular-nums}
+.count{margin:0;font-size:14px;white-space:nowrap;color:#5b6b62}
+.count strong{font-size:25px;font-weight:650;color:var(--accent);margin-right:5px}
+.save-state{margin:6px 0 0;min-height:19px;font-size:12px;color:#647b6d;white-space:nowrap}
+.save-state[data-status="error"]{color:#ac4436}
+.notice{max-width:1024px;margin:0 auto 18px;padding:11px 14px;border-radius:8px;background:#fff0e9;color:#943f30;font-size:13px;line-height:1.6}
+[hidden]{display:none!important}
+main{max-width:1080px;margin:24px auto;padding:0 28px 40px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+.product{position:relative;display:flex;flex-direction:column;min-width:0;padding:22px;background:#fff;border:1px solid #e0e6e0;border-radius:14px;cursor:pointer;transition:border-color .12s ease,box-shadow .12s ease}
+.product:has(input:checked){border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.product:has(input:focus-visible){outline:3px solid #aac9b9;outline-offset:4px}
+.product:has(input:disabled){cursor:default}
+.choice{appearance:none;position:absolute;top:21px;right:21px;width:24px;height:24px;margin:0;border:1.5px solid #b7c3b9;border-radius:7px;background:#fff;cursor:inherit;display:grid;place-content:center;outline:none}
+.choice:checked{background:var(--accent);border-color:var(--accent)}
+.choice:checked:after{content:"";width:11px;height:6px;border-left:2px solid white;border-bottom:2px solid white;transform:translateY(-1px) rotate(-45deg)}
+.product-top{display:flex;align-items:center;gap:20px;min-height:122px;padding-right:27px;margin-bottom:18px}
+.picture{width:118px;height:122px;flex-shrink:0;display:grid;place-items:center;background:#fff;border-radius:9px;overflow:hidden}
+.picture img{display:block;width:100%;height:100%;object-fit:contain}
+.no-image{background:#f4f6f3;color:#7d8a7f;font-size:12px}
+.identity{min-width:0}
+h2{font-size:19px;font-weight:650;line-height:1.5;margin:0 0 12px;overflow-wrap:anywhere}
+.price{margin:5px 0 0;line-height:1.55;overflow-wrap:anywhere}
+.price-label{display:block;font-size:12px;color:#79867d;margin-bottom:2px}
+.price-value{font-size:22px;font-weight:650;letter-spacing:-.02em;color:var(--accent);font-variant-numeric:tabular-nums}
+.facts{padding-top:16px;border-top:1px solid #edf0eb;white-space:pre-line;line-height:1.85;color:#58675e;font-size:13px;overflow-wrap:anywhere}
+.tags{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:14px 0 0;color:#79857d;font-size:12px;line-height:1.6}
+.tag{padding:2px 8px;background:#f3f6f2;border-radius:5px;color:#607467}
+.source{margin:15px 0 0;color:#889189;font-size:11px;line-height:1.6;overflow-wrap:anywhere}
+@media(hover:hover) and (pointer:fine){.product:hover{border-color:#9cb9a8}.product:has(input:checked):hover{border-color:var(--accent)}}
+@media(max-width:700px){.heading{padding:20px;gap:14px;align-items:flex-start}h1{font-size:21px}.summary{padding-top:1px;width:76px}.count strong{font-size:23px}.count .total{display:none}.instruction{font-size:12px}.notice{margin:0 16px 14px}main{grid-template-columns:1fr;margin-top:16px;padding:0 16px 30px;gap:14px}.product{padding:19px}.choice{top:18px;right:18px}.product-top{gap:16px;min-height:110px;margin-bottom:15px}.picture{width:102px;height:110px}h2{font-size:18px}.price-value{font-size:21px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
-<header><h1 id="title">请选择产品</h1><p>勾选想要的产品，选择会自动保存。选好后回到 Codex 说“选好了”。</p><div id="status" class="status" role="status" aria-live="polite">正在载入…</div></header><main id="products"></main>
+</head>
+<body>
+<header class="topbar">
+  <div class="heading">
+    <div><h1 id="title">请选择产品</h1><p class="instruction">点选想要的产品，选好后回到 Codex 说“选好了”。</p></div>
+    <div class="summary" aria-live="polite" aria-atomic="true">
+      <p class="count"><strong id="selected-count">0</strong>款已选<span class="total"> / <span id="total-count">0</span> 款</span></p>
+      <p id="status" class="save-state" role="status">正在读取…</p>
+    </div>
+  </div>
+  <p id="notice" class="notice" role="alert" hidden></p>
+</header>
+<main id="products" aria-label="候选产品" aria-busy="true"></main>
 <script>
-const base=location.pathname.replace(/\/?$/,'/');let state;let saving=false;let rendered=false;
-const status=document.querySelector('#status'), products=document.querySelector('#products');
+const base=location.pathname.replace(/\/?$/,'/');
+const products=document.querySelector('#products'), status=document.querySelector('#status'), notice=document.querySelector('#notice');
+const controls=new Map();
+let state, desired=new Set(), confirmed=new Set(), writing=false, locked=false, saveTimer, feedbackTimer;
+
 function element(tag,text,cls){const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node}
-function statusText(text,error=false){status.textContent=text;status.classList.toggle('error',error)}
-function render(){document.querySelector('#title').textContent=state.title;products.replaceChildren();
-  for(const item of state.items){const label=element('label',undefined,'product');const check=document.createElement('input');check.type='checkbox';check.checked=item.selected;check.disabled=state.state!=='open';check.dataset.id=item.id;check.setAttribute('aria-label','选择 '+item.name);check.addEventListener('change',save);label.append(check);
-    if(item.image){const img=document.createElement('img');img.className='picture';img.alt=item.name;img.src=base+'image/'+encodeURIComponent(item.id);label.append(img)}else label.append(element('div','暂无图片','picture no-image'));
-    const content=element('div',undefined,'content');content.append(element('h2',[item.name,item.model,item.variant].filter((v,i,a)=>v&&a.indexOf(v)===i).join(' / ')));
-    content.append(element('div',item.prices.map(p=>p.label+'  '+(p.value===null||p.value===''?'未提供':p.value)).join(' · '),'prices'));
-    content.append(element('div',item.features||'来源未提供详细说明','facts'));
-    if(item.tags.length)content.append(element('div',item.tags.slice(0,4).map(t=>(t.origin==='inferred'?'推荐判断：':'来源标注：')+t.value+' — '+t.reason).join('\n'),'reason'));
-    content.append(element('div',item.source_file+' · '+item.locator,'source'));label.append(content);products.append(label)}
-  rendered=true;syncSelection()}
-function syncSelection(){for(const check of products.querySelectorAll('input')){check.checked=state.selected_ids.includes(check.dataset.id);check.disabled=state.state!=='open'}statusText('已选 '+state.selected_ids.length+' / '+state.candidates+' 款'+(state.state==='sealed'?' · 本次选择已用于生成图册':state.state==='closed'?' · 本次选择已关闭':' · 已保存'))}
-async function load(){const response=await fetch(base+'state',{cache:'no-store'});if(!response.ok)throw Error('无法读取选择');state=await response.json();if(rendered)syncSelection();else render()}
-async function save(){if(saving)return;saving=true;const ids=[...products.querySelectorAll('input:checked')].map(n=>n.dataset.id);products.querySelectorAll('input').forEach(n=>n.disabled=true);statusText('正在保存…');
-  try{const response=await fetch(base+'selection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids,revision:state.revision})});if(!response.ok){const info=await response.json();throw Error(info.error||'保存失败')}const result=await response.json();state.revision=result.revision;state.selected_ids=result.selected_ids;state.state=result.state;for(const item of state.items)item.selected=result.selected_ids.includes(item.id);syncSelection()}
-  catch(error){try{await load()}catch{}statusText('本次更改未保存：'+error.message+'。请重新勾选。',true)}finally{saving=false}}
-if(location.protocol==='file:')statusText('请通过 Codex 打开的本地选择链接使用本页，以便保存勾选。',true);else load().catch(error=>statusText(error.message+'。请回到 Codex 重新打开选择页。',true));
+function dirty(){return desired.size!==confirmed.size||[...desired].some(id=>!confirmed.has(id))}
+function statusText(text,error=false){if(status.textContent!==text)status.textContent=text;status.dataset.status=error?'error':'saved'}
+function message(text=''){notice.textContent=text;notice.hidden=!text}
+function syncControls(){for(const [id,check] of controls){check.checked=desired.has(id);const disabled=locked||state.state!=='open';if(check.disabled!==disabled)check.disabled=disabled}document.querySelector('#selected-count').textContent=desired.size}
+function adopt(saved){state.revision=saved.revision;state.state=saved.state;confirmed=new Set(saved.selected_ids);desired=new Set(confirmed);syncControls()}
+function settledStatus(){statusText(state.state==='sealed'?'选择已封存':state.state==='closed'?'选择已关闭':'自动保存')}
+
+function renderProducts(){
+  document.querySelector('#title').textContent=state.title;
+  document.querySelector('#total-count').textContent=state.candidates;
+  const fragment=document.createDocumentFragment();
+  for(const [index,item] of state.items.entries()){
+    const card=element('label',undefined,'product');
+    const check=document.createElement('input');check.type='checkbox';check.className='choice';check.dataset.id=item.id;
+    check.setAttribute('aria-label','选择 '+item.name);check.addEventListener('change',choose);controls.set(item.id,check);card.append(check);
+    const top=element('div',undefined,'product-top'), picture=element('div',undefined,'picture');
+    if(item.image){
+      const img=document.createElement('img');img.alt=item.name;img.width=118;img.height=122;img.loading=index<4?'eager':'lazy';img.src=base+'image/'+encodeURIComponent(item.id);
+      img.addEventListener('error',()=>{picture.classList.add('no-image');picture.textContent='图片暂不可用'});picture.append(img);
+    }else{picture.classList.add('no-image');picture.textContent='暂无图片'}
+    top.append(picture);
+    const identity=element('div',undefined,'identity');
+    identity.append(element('h2',[item.name,item.model,item.variant].filter((v,i,a)=>v&&a.indexOf(v)===i).join(' / ')));
+    for(const price of item.prices){const row=element('p',undefined,'price');row.append(element('span',price.label,'price-label'),element('span',price.value===null||price.value===''?'未提供':price.value,'price-value'));identity.append(row)}
+    top.append(identity);card.append(top,element('div',item.features||'来源未提供详细说明','facts'));
+    for(const origin of ['source','inferred']){
+      const tags=item.tags.filter(tag=>tag.origin===origin);if(!tags.length)continue;
+      const row=element('p',undefined,'tags');row.append(element('span',origin==='inferred'?'推荐参考':'来源标注'));
+      for(const tag of tags){const chip=element('span',tag.value,'tag');chip.title=tag.reason;chip.setAttribute('aria-label',tag.value+'：'+tag.reason);row.append(chip)}card.append(row);
+    }
+    const source=element('p',item.source_file,'source');source.title=item.locator;card.append(source);fragment.append(card);
+  }
+  products.append(fragment);products.setAttribute('aria-busy','false');syncControls();settledStatus();
+}
+
+async function request(path,options={}){
+  const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),10000);
+  try{
+    const response=await fetch(base+path,{cache:'no-store',...options,signal:controller.signal});
+    if(!response.ok){const error=new Error('保存失败');error.status=response.status;throw error}
+    return await response.json();
+  }finally{clearTimeout(timeout)}
+}
+
+function choose(event){
+  const check=event.currentTarget;
+  if(locked||state.state!=='open'){syncControls();return}
+  if(check.checked)desired.add(check.dataset.id);else desired.delete(check.dataset.id);
+  document.querySelector('#selected-count').textContent=desired.size;message();
+  if(!writing)settledStatus();
+  clearTimeout(saveTimer);saveTimer=setTimeout(flush,80);
+}
+
+async function recover(error){
+  locked=true;syncControls();statusText('正在核对…',true);
+  try{
+    const saved=await request('state');locked=false;adopt(saved);
+    if(state.state!=='open'){settledStatus();message('本次选择已结束，修改选品请回到 Codex。');return}
+    statusText('已恢复选择',true);
+    message(error.status===409?'选择已在其他窗口更新，已同步保存结果。请重新勾选。':'本次更改未能确认，已恢复保存的选择。请重新勾选。');
+  }catch{
+    statusText('尚未确认保存',true);
+    message('无法连接选择页。当前更改尚未确认保存，请回到 Codex 重新打开。');
+  }
+}
+
+async function flush(){
+  clearTimeout(saveTimer);
+  if(writing||locked||!state||state.state!=='open'||!dirty())return;
+  writing=true;
+  // Short saves keep the status steady. Only a sustained wait shows progress.
+  feedbackTimer=setTimeout(()=>statusText('正在保存…'),600);
+  try{
+    while(dirty()&&state.state==='open'){
+      const ids=[...desired];
+      const saved=await request('selection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids,revision:state.revision})});
+      state.revision=saved.revision;state.state=saved.state;confirmed=new Set(saved.selected_ids);
+      // A response confirms its own batch; newer local clicks remain the next batch.
+      if(state.state!=='open'){adopt(saved);break}
+    }
+    settledStatus();
+  }catch(error){clearTimeout(feedbackTimer);await recover(error)}
+  finally{clearTimeout(feedbackTimer);writing=false}
+}
+
+window.addEventListener('beforeunload',event=>{if(writing||dirty()){event.preventDefault();event.returnValue=''}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)flush()});
+if(location.protocol==='file:'){
+  statusText('尚未连接',true);message('请通过 Codex 打开的本地选择链接使用本页。');products.setAttribute('aria-busy','false');
+}else request('state').then(saved=>{state=saved;confirmed=new Set(saved.selected_ids);desired=new Set(confirmed);renderProducts()}).catch(()=>{
+  statusText('暂时无法读取',true);message('选择页暂时无法连接，请回到 Codex 重新打开。');products.setAttribute('aria-busy','false');
+});
 </script>
+</body>
 </html>

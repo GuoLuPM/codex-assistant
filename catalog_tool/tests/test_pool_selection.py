@@ -83,6 +83,13 @@ class SelectionTests(unittest.TestCase):
             with urlopen(request) as response:
                 self.assertEqual(json.load(response)["selected_ids"], self.ids[:1])
             self.assertEqual(self.selections.state(self.session)["selected_ids"], self.ids[:1])
+            directory = self.pool.root / "sessions" / self.session
+            (directory / "index.html").write_text("old page", encoding="utf-8")
+            (directory / "server.local.json").write_text(json.dumps({"url": url}), encoding="utf-8")
+            self.assertEqual(open_session(self.pool.root, self.session)["url"], url)
+            with urlopen(url) as response:
+                self.assertIn('id="products"', response.read().decode())
+            self.assertEqual(self.selections.state(self.session)["selected_ids"], self.ids[:1])
         finally:
             shared["server"].shutdown()
             worker.join(5)
