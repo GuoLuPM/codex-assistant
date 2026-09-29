@@ -12,12 +12,15 @@ from urllib.request import urlopen
 
 from pool_selection import Selections
 from pool_store import Pool, encoded
+from pool_share import ShareManager
+from pool_share_view import PublicView
 
 
 def server_for(pool, session_id, port=0):
     selections = Selections(pool)
     session = selections.session(session_id)
     prefix = "/" + session["token"] + "/"
+    sharing = ShareManager(Path(__file__).resolve().parents[1], pool.root / 'sessions' / session_id)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -40,6 +43,8 @@ def server_for(pool, session_id, port=0):
             return self.headers.get("Host") == host and self.path.startswith(prefix)
 
         def do_GET(self):
+            if self.path == '/favicon.ico' and self.headers.get('Host') == f'127.0.0.1:{self.server.server_port}':
+                return self.reply(204, b'', 'image/x-icon')
             if not self.allowed():
                 return self.reply(404, {"error": "Unknown selection page"})
             relative = self.path[len(prefix):]
@@ -47,7 +52,9 @@ def server_for(pool, session_id, port=0):
                 page = pool.root / "sessions" / session_id / "index.html"
                 return self.reply(200, page.read_bytes(), "text/html; charset=utf-8")
             if relative == "state":
-                return self.reply(200, selections.state(session_id, include_items=True))
+                return self.reply(200, {**selections.state(session_id, include_items=True), 'sharing': True, 'server_version': 2})
+            if relative == 'share':
+                return self.reply(200, sharing.state())
             if relative.startswith("image/"):
                 product_id = relative[6:]
                 row = pool.db.execute("SELECT snapshot FROM pool_choices WHERE session_id=? AND product_id=?", (session_id, product_id)).fetchone()
@@ -60,7 +67,8 @@ def server_for(pool, session_id, port=0):
 
         def do_POST(self):
             origin = f"http://127.0.0.1:{self.server.server_port}"
-            if not self.allowed() or self.headers.get("Origin") != origin or self.path != prefix + "selection":
+            route = self.path[len(prefix):] if self.path.startswith(prefix) else ''
+            if not self.allowed() or self.headers.get("Origin") != origin or route not in ('selection', 'share/start', 'share/stop'):
                 return self.reply(403, {"error": "Selection origin/path denied"})
             if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
                 return self.reply(415, {"error": "JSON required"})
@@ -69,6 +77,21 @@ def server_for(pool, session_id, port=0):
                 if not 1 <= length <= 20000:
                     raise ValueError("Invalid request size")
                 data = json.loads(self.rfile.read(length))
+                if route.startswith('share/'):
+                    if route == 'share/stop':
+                        if data != {}: raise ValueError('Expected empty stop request')
+                        return self.reply(200, sharing.stop())
+                    if not isinstance(data, dict) or set(data) != {'minutes'} or type(data['minutes']) is not int or data['minutes'] not in (15, 60, 240):
+                        raise ValueError('分享时长请选择 15 分钟、1 小时或 4 小时')
+                    if selections.session(session_id)['state'] != 'open': raise ValueError('这次选择已结束，请重新打开候选页')
+                    if sharing.busy(): return self.reply(200, sharing.state())
+                    try:
+                        selections.verify(session_id)
+                    except (OSError, ValueError) as error:
+                        print('Share source validation failed: ' + str(error), flush=True)
+                        raise ValueError('本页资料或图片已经变化，请回聊天里重新生成候选页') from error
+                    view = PublicView(selections.state(session_id, include_items=True), pool.root)
+                    return self.reply(200, sharing.start(view, data['minutes']))
                 if not isinstance(data, dict) or set(data) != {"ids", "revision"} or type(data["revision"]) is not int:
                     raise ValueError("Expected ids and integer revision")
                 state = selections.select(session_id, data["ids"], data["revision"])
@@ -76,7 +99,13 @@ def server_for(pool, session_id, port=0):
             except (ValueError, TypeError) as error:
                 self.reply(409, {"error": str(error)})
 
-    return HTTPServer(("127.0.0.1", port), Handler), prefix
+    class SelectionServer(HTTPServer):
+        def server_close(self):
+            try: sharing.close()
+            finally: super().server_close()
+    server = SelectionServer(('127.0.0.1', port), Handler)
+    server.sharing = sharing
+    return server, prefix
 
 
 def serve(root, session_id, port=0):
@@ -89,7 +118,10 @@ def serve(root, session_id, port=0):
     try:
         server.timeout = 1
         deadline = time.monotonic() + 3600
-        while time.monotonic() < deadline and Selections(pool).session(session_id)["state"] == "open":
+        while time.monotonic() < deadline or server.sharing.busy():
+            state = Selections(pool).session(session_id)['state']
+            if state == 'closed' or (state != 'open' and not server.sharing.busy()):
+                break
             server.handle_request()
     finally:
         server.server_close()
@@ -114,7 +146,8 @@ def open_session(root, session_id):
         state = json.loads(path.read_text(encoding="utf-8"))
         try:
             with urlopen(state["url"] + "state", timeout=1) as response:
-                if json.load(response).get("session_id") == session_id:
+                data = json.load(response)
+                if data.get('session_id') == session_id and data.get('server_version') == 2:
                     return state
         except OSError:
             pass  # Restart an explicitly unavailable local helper, retaining SQLite choices.

@@ -68,6 +68,11 @@ def build(tag, output, cache, proxy=None):
                 target.write_bytes(source.read(entry))
         python_root = root / 'runtime/python'
         extract(download(lock['python'], cache, proxy), python_root)
+        share_lock = json.loads((ROOT / 'packaging/share-lock.json').read_text(encoding='utf-8'))
+        share_root = root / 'runtime/share'
+        share_root.mkdir(parents=True)
+        for key, filename in (('binary', 'cloudflared.exe'), ('license', 'LICENSE')):
+            shutil.copyfile(download(share_lock[key], cache, proxy), share_root / filename)
         packages = python_root / 'Lib/site-packages'
         packages.mkdir(parents=True)
         wheels = [download(record, cache, proxy) for record in lock['core']]

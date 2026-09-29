@@ -12,7 +12,7 @@
 
 当前能力：
 
-- **pool** — 多格式文件持续加入产品池，内容去重，按价格/品类/推荐场景检索，HTML 勾选后生成 PPT。读 [产品池短流程](catalog_tool/POOL_WORKFLOW.md)。
+- **pool** — 多格式文件持续加入产品池，内容去重，按价格/品类/推荐场景检索，HTML 勾选后生成 PPT；可生成临时只读链接给别人看。读 [产品池短流程](catalog_tool/POOL_WORKFLOW.md)。
 - **catalog** — 既有 XLSX 坐标映射、增量检索与图册流程。读 [catalog 短流程](catalog_tool/WORKFLOW.md)。
 
 两者共用检索和生成引擎，默认最终交付一份 `outputs/产品图册.pptx`。业务数据与推荐判断分开保存，完整记录不需要穿过模型上下文。

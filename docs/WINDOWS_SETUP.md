@@ -4,7 +4,7 @@
 
 ## 取得工程
 
-- 新电脑优先使用 [Releases 的 Windows x64 安装包](https://github.com/GuoLuPM/codex-assistant/releases/latest)，包内含 Python 和基础依赖、校验清单及安装器；对接步骤和可转发提示词见 [Windows Release 对接](WINDOWS_RELEASE.md)。PDF 在目标机器下载，PPT 对接目标机器自己的 Codex 组件。
+- 新电脑优先使用 [Releases 的 Windows x64 安装包](https://github.com/GuoLuPM/codex-assistant/releases/latest)，包内含 Python、基础依赖、临时分享组件、校验清单及安装器；对接步骤和可转发提示词见 [Windows Release 对接](WINDOWS_RELEASE.md)。PDF 在目标机器下载，PPT 对接目标机器自己的 Codex 组件；分享网络排查读 [临时分享](TEMPORARY_SHARING.md)。
 
 - 公开仓库 `https://github.com/GuoLuPM/codex-assistant`，不需要 GitHub 账号登录。优先 `git clone https://github.com/GuoLuPM/codex-assistant.git D:\code\assistant`。
 - 没有 Git：优先找 Codex 随附 Git；也可下载仓库默认分支 ZIP 解压。无 Git 仍可本地运行，公开历史检查与代码同步需要 Git。安装工具时以官方来源和当前设备为准。

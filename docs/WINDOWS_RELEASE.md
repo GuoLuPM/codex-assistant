@@ -5,11 +5,14 @@
 ## 包里有什么
 
 - 当前公开工程、官方 Python 3.13.15 x64、已固定版本的 Excel/Word/PPT 读取与图像依赖、pip、许可证及逐文件 SHA-256 清单。
+- 临时分享组件 cloudflared 及 Apache-2.0 许可证也已包含；选品页可生成只读外网链接，使用时需要联网，无需额外账号或域名。
 - PDF 的 PyMuPDF 固定版本由安装器从官方 PyPI 文件地址下载到用户电脑，可使用 HTTP 代理。`-SkipPdf` 可明确跳过，结果会标记 PDF 未安装。
 - PPT 导出继续对接这台电脑由 Codex 提供的 Node、artifact-tool 和 Presentations skill。这些专用组件没有重新分发进公开包；首次使用可能需要 Codex 下载自己的运行时。不能说这是完全离线的全功能包。
 - 产品数据库、报价文件、账号、API key、旧机器环境路径均不包含。新安装从空产品池开始。
 
 来源：[Python 官方发行及校验值](https://www.python.org/downloads/release/python-31315/)、[PyMuPDF 说明](https://pymupdf.readthedocs.io/en/latest/)。核心依赖的源地址和哈希见 `packaging/windows-lock.json`；各许可证随 Python 与 `.dist-info` 保留。
+
+分享组件的官方地址和哈希见 `packaging/share-lock.json`；网络条件及排错仅在需要时读 [临时分享](TEMPORARY_SHARING.md)。包内入口文档解压后的相应路径为 `application/docs/TEMPORARY_SHARING.md`。
 
 ## 1. 下载和安装
 
@@ -63,6 +66,7 @@ Set-Location D:\code\assistant
 - 用户可以说：“这几份报价加进去”“一百以内，适合过年送长辈，别要数码”“给我挑几款，我勾好了再做 PPT”。Codex 拆条件、查依据、显示 HTML；用户只勾选，最终交付一份 PPT。
 - 来源、产品池及本地配置留在当前电脑。数据迁移必须私下传完整 `data/product-pool/`；不是下载公开 Release 就有原来的产品。迁移时先停写入和选择服务，步骤见 `docs/WINDOWS_SETUP.md`。
 - 新电脑要重新 `open --session ID` 获取本机地址；旧电脑的 `127.0.0.1` 链接不能通用。VPN 7890 只帮助联网，不是远程数据库或远程桌面地址。
+- 给别人看商品时点击页头分享图标，复制临时链接；默认 1 小时，电脑保持开机联网，可随时停止。分享本页全部候选及展示价，访客只能看。仅 HTTP 代理并不保证隧道连接，须实测收件人的网络。
 - 默认普通速度 GPT-6 Sol；Terra 用于有限核对。无需额外 API key 或独立 agent 服务。
 
 ## 发给用户的 Codex 提示词
@@ -74,5 +78,5 @@ Set-Location D:\code\assistant
 
 按文档安装，并用 Codex 的 load_workspace_dependencies 和本机 Presentations skill 完成 PPT 环境对接。用合成资料跑 check_windows_deployment.py --require-pdf --ppt，实际导出成功后再说已完成；缺什么就继续处理或明确报告，不要猜已装好。公开安装包不含产品数据，有我提供的文件再加入产品池。
 
-以后由你从 Codex 帮我入库和查产品，我只在 HTML 里勾选，选好后再生成一份 PPT。用普通速度的 GPT-6 Sol，不开快速模式。沟通尽量口语化，按项目 AGENTS.md 和按需指南执行。
+以后由你从 Codex 帮我入库和查产品，我只在 HTML 里勾选，选好后再生成一份 PPT。需要临时给别人看时，我会点击分享图标；不要替我自动公开产品。用普通速度的 GPT-6 Sol，不开快速模式。沟通尽量口语化，按项目 AGENTS.md 和按需指南执行。
 ```

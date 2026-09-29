@@ -99,15 +99,18 @@ class Selections:
                 raise ValueError("Selection session is closed; create a new selection")
             if not state["selected_ids"]:
                 raise ValueError("No products selected; let the user select in HTML first")
-            for row in self.db.execute("""SELECT c.payload_hash AS frozen,m.payload_hash AS current
-                FROM pool_choices c JOIN pool_members m ON m.product_id=c.product_id
-                WHERE c.session_id=? AND c.selected=1""", (session_id,)):
-                if row["frozen"] != row["current"]:
-                    raise ValueError("Selected product changed since presentation of choices")
-            for row in self.db.execute('SELECT product_id,context_hash FROM pool_choices WHERE session_id=? AND selected=1', (session_id,)):
-                current = self.pool.selection_context(row['product_id'])
-                if row['context_hash'] is not None and row['context_hash'] != current:
-                    raise ValueError('Selected quote/recommendation context changed; create a fresh selection')
-            self.pool.details(state["selected_ids"], verify_fresh=True)
+            self.verify(session_id, selected_only=True)
             self.db.execute("UPDATE pool_sessions SET state='sealed' WHERE id=?", (session_id,))
         return self.state(session_id)
+
+    def verify(self, session_id, selected_only=False):
+        condition = ' AND c.selected=1' if selected_only else ''
+        rows = list(self.db.execute('''SELECT c.product_id,c.context_hash,c.payload_hash AS frozen,m.payload_hash AS current
+            FROM pool_choices c JOIN pool_members m ON m.product_id=c.product_id WHERE c.session_id=?''' + condition, (session_id,)))
+        for row in rows:
+            if row['frozen'] != row['current']:
+                raise ValueError('Selected product changed since presentation of choices')
+            current = self.pool.selection_context(row['product_id'])
+            if row['context_hash'] is not None and row['context_hash'] != current:
+                raise ValueError('Selected quote/recommendation context changed; create a fresh selection')
+        self.pool.details([row['product_id'] for row in rows], verify_fresh=True)
