@@ -2,6 +2,8 @@
 *.xlsx
 *.xls
 *.xlsm
+*.doc
+*.docx
 *.csv
 *.tsv
 *.pptx

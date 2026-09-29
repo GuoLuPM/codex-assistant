@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PRIVATE_SUFFIXES = {".xlsx", ".xls", ".xlsm", ".csv", ".tsv", ".pptx", ".pdf", ".png", ".jpg", ".jpeg", ".webp", ".zip", ".db", ".sqlite", ".sqlite3", ".pem", ".key"}
+PRIVATE_SUFFIXES = {".xlsx", ".xls", ".xlsm", ".csv", ".tsv", ".pptx", ".pdf", ".doc", ".docx", ".png", ".jpg", ".jpeg", ".webp", ".zip", ".db", ".sqlite", ".sqlite3", ".pem", ".key"}
 RULES = {
     "private-key": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
     "github-token": re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})\b"),

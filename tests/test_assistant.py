@@ -19,7 +19,7 @@ class AssistantTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         data = json.loads(result.stdout)
         self.assertGreaterEqual(data["total"], 1)
-        self.assertEqual(data["items"][0]["id"], "catalog")
+        self.assertIn(data["items"][0]["id"], {"catalog", "pool"})
         self.assertLess(len(result.stdout), 1000)
         self.assertNotIn(".catalog-index", result.stdout)
         total = json.loads(self.run_cli("list").stdout)["total"]

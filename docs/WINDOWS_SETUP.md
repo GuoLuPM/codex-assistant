@@ -20,7 +20,7 @@ $env:ASSISTANT_PYTHON = 'D:\tools\assistant-venv\Scripts\python.exe'
 ./assistant.ps1 list
 ```
 
-如需新建虚拟环境，用已核验的 Python 执行 `-m venv D:\tools\assistant-venv`，pip 缓存可通过 `PIP_CACHE_DIR` 指向 D 盘。`doctor` 返回实际 Python 和项目路径，只表示入口可用。catalog 检索还需 openpyxl/Pillow 与 SQLite FTS5；运行其测试验证实际依赖。
+如需新建虚拟环境，用已核验的 Python 执行 `-m venv D:\tools\assistant-venv`，pip 缓存可通过 `PIP_CACHE_DIR` 指向 D 盘。`doctor` 返回实际 Python 和项目路径，只表示入口可用。pool/catalog 检索需 SQLite FTS5 与 requirements 中的 Python 依赖；多格式读取使用 PyMuPDF、python-pptx、python-docx、xlrd。选择页使用 Python 标准库 HTTP 服务，无须安装 Web 框架或单独数据库。运行测试验证实际依赖。
 
 ## PPT 环境
 
@@ -33,6 +33,14 @@ PPT 使用 Codex 桌面版提供的 Node/Python、`@oai/artifact-tool` 与 Prese
 - 默认从本机用户目录发现 Codex 运行时；没有该环境就报告缺少哪些依赖，不把未核验的文件称作已完成 PPT。
 
 ## 私有数据与迁移
+
+### 产品池 pool（持续积累）
+
+新文件放 `data/` 后，按 pool guide 执行 `add`；非 XLSX 或异形表由 Codex 看证据并提供映射/记录。Git 只传代码，不含产品数据库和原件。
+
+迁移已有池：先停止使用中的选择服务与数据库写入，私下复制**整个 `data/product-pool/`**（数据库、objects、assets、sessions）到新项目同一相对目录，再复制必要的本地样式/配置。池内路径相对存储，无须 catalog relocate，产品 ID 保持不变。新机器 `run pool stats`、`show --ids 已知ID` 核验；开放选择会话用 `open --session ID` 取得本机新链接，旧设备的 127.0.0.1 链接不能远程访问。
+
+### 既有 catalog 索引
 
 全新部署将工作簿放 `data/`，复制必要的 `catalog.local.json` / `style.local.json` 与私有映射；这些均不上传。没有旧索引时，首次按 `来源.xlsx --map 映射.local.json` 登记，随后增量复用。
 
@@ -56,4 +64,4 @@ PPT 使用 Codex 桌面版提供的 Node/Python、`@oai/artifact-tool` 与 Prese
 & $env:ASSISTANT_PYTHON -m unittest discover -s catalog_tool/tests -v
 ```
 
-再查一条真实记录、核对价格标签与来源；PPT 环境齐全时用明确选品通过 `ppt --ids ... --price-fields ...` 生成并视觉抽查。只有完成这一项才能说 PPT 已部署成功。已有客户成品时，冒烟产物放私有临时目录并收尾，不替换客户成品。用户日常只收到一个最终文件。
+再查一条真实记录、核对价格标签与来源；pool 用 `choose/open` 打开选择页，确认勾选持久化后 `ppt --session ...` 导出；catalog 用明确 ID 通过 `ppt --ids ... --price-fields ...` 生成。PPT 环境齐全且视觉抽查后才能说 PPT 已部署成功。已有客户成品时，冒烟产物放私有临时目录并收尾，不替换客户成品。用户日常只收到一个最终文件。

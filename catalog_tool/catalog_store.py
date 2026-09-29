@@ -283,9 +283,14 @@ class Catalog:
                 stale.append(source["path"])
         return stale
 
+    def _search_constraints(self, constraints):
+        if constraints:
+            raise ValueError("Additional constraints are not supported by this catalogue")
+        return [], []
+
     def search(self, query="", price_field=None, minimum=None, maximum=None, category=None, source=None,
                brand=None, supplier=None, scope="name", exclude=(), has_image=False,
-               limit=10, offset=0, sort="relevance"):
+               limit=10, offset=0, sort="relevance", constraints=None):
         started = time.perf_counter()
         if scope not in {"name", "all"} or sort not in {"relevance", "price-asc", "price-desc"}:
             raise ValueError("Unsupported scope or sort")
@@ -339,6 +344,9 @@ class Catalog:
         if stale:
             where.append("p.source_path NOT IN (" + ",".join("?" for _ in stale) + ")")
             args.extend(stale)
+        extra_where, extra_args = self._search_constraints(constraints or {})
+        where.extend(extra_where)
+        args.extend(extra_args)
         base = " FROM products p " + " ".join(joins) + " WHERE " + " AND ".join(where)
         total = self.db.execute("SELECT count(*)" + base, args).fetchone()[0]
         order = "bm25(products_fts,8,1),p.id" if terms else "p.source_path,p.sheet,p.source_row"

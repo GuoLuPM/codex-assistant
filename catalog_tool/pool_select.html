@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>选择产品</title>
+<style>
+:root{font-family:"Microsoft YaHei",system-ui,sans-serif;color:#182c42;background:#f5f7fa;font-size:15px}*{box-sizing:border-box}body{margin:0}header{background:white;border-bottom:1px solid #dce3eb;padding:28px max(24px,calc((100vw - 1080px)/2));position:sticky;top:0;z-index:2}h1{font-size:26px;margin:0 0 8px;font-weight:650}p{margin:0;color:#5d6c7e;line-height:1.6}.status{margin-top:12px;font-size:14px;color:#1b6353;min-height:23px}.error{color:#aa302d}main{max-width:1080px;margin:24px auto;padding:0 24px 48px;display:grid;gap:16px}.product{display:grid;grid-template-columns:28px 164px 1fr;gap:24px;padding:24px;background:white;border:2px solid transparent;border-radius:10px;cursor:pointer;align-items:start}.product:has(input:checked){border-color:#235ca4;background:#f5f9ff}.product:focus-within{outline:2px solid #799ac5;outline-offset:3px}input{width:23px;height:23px;accent-color:#235ca4;margin:3px 0}.picture{width:164px;height:154px;object-fit:contain;background:#fff}.no-image{display:grid;place-items:center;color:#8994a3;background:#f1f3f6}.content{min-width:0}h2{font-size:19px;line-height:1.45;margin:0 0 10px;overflow-wrap:anywhere}.prices{font-size:18px;color:#1b4f8f;margin-bottom:12px;font-weight:600}.facts{white-space:pre-line;line-height:1.7;color:#435369;overflow-wrap:anywhere}.reason{margin-top:12px;padding-top:12px;border-top:1px solid #e3e8f0;font-size:13px;color:#52647a}.source{font-size:12px;color:#8993a2;margin-top:12px;overflow-wrap:anywhere}@media(max-width:600px){header{padding:20px}main{padding:0 14px}.product{grid-template-columns:25px 80px 1fr;gap:12px;padding:16px}.picture{width:80px;height:90px}h2{font-size:17px}.prices{font-size:16px}}
+.reason{white-space:pre-line}@media(max-width:600px){.product{grid-template-columns:25px 1fr}.picture{width:120px;height:110px}.content{grid-column:1/-1}}
+</style>
+<header><h1 id="title">请选择产品</h1><p>勾选想要的产品，选择会自动保存。选好后回到 Codex 说“选好了”。</p><div id="status" class="status" role="status" aria-live="polite">正在载入…</div></header><main id="products"></main>
+<script>
+const base=location.pathname.replace(/\/?$/,'/');let state;let saving=false;let rendered=false;
+const status=document.querySelector('#status'), products=document.querySelector('#products');
+function element(tag,text,cls){const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node}
+function statusText(text,error=false){status.textContent=text;status.classList.toggle('error',error)}
+function render(){document.querySelector('#title').textContent=state.title;products.replaceChildren();
+  for(const item of state.items){const label=element('label',undefined,'product');const check=document.createElement('input');check.type='checkbox';check.checked=item.selected;check.disabled=state.state!=='open';check.dataset.id=item.id;check.setAttribute('aria-label','选择 '+item.name);check.addEventListener('change',save);label.append(check);
+    if(item.image){const img=document.createElement('img');img.className='picture';img.alt=item.name;img.src=base+'image/'+encodeURIComponent(item.id);label.append(img)}else label.append(element('div','暂无图片','picture no-image'));
+    const content=element('div',undefined,'content');content.append(element('h2',[item.name,item.model,item.variant].filter((v,i,a)=>v&&a.indexOf(v)===i).join(' / ')));
+    content.append(element('div',item.prices.map(p=>p.label+'  '+(p.value===null||p.value===''?'未提供':p.value)).join(' · '),'prices'));
+    content.append(element('div',item.features||'来源未提供详细说明','facts'));
+    if(item.tags.length)content.append(element('div',item.tags.slice(0,4).map(t=>(t.origin==='inferred'?'推荐判断：':'来源标注：')+t.value+' — '+t.reason).join('\n'),'reason'));
+    content.append(element('div',item.source_file+' · '+item.locator,'source'));label.append(content);products.append(label)}
+  rendered=true;syncSelection()}
+function syncSelection(){for(const check of products.querySelectorAll('input')){check.checked=state.selected_ids.includes(check.dataset.id);check.disabled=state.state!=='open'}statusText('已选 '+state.selected_ids.length+' / '+state.candidates+' 款'+(state.state==='sealed'?' · 本次选择已用于生成图册':state.state==='closed'?' · 本次选择已关闭':' · 已保存'))}
+async function load(){const response=await fetch(base+'state',{cache:'no-store'});if(!response.ok)throw Error('无法读取选择');state=await response.json();if(rendered)syncSelection();else render()}
+async function save(){if(saving)return;saving=true;const ids=[...products.querySelectorAll('input:checked')].map(n=>n.dataset.id);products.querySelectorAll('input').forEach(n=>n.disabled=true);statusText('正在保存…');
+  try{const response=await fetch(base+'selection',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids,revision:state.revision})});if(!response.ok){const info=await response.json();throw Error(info.error||'保存失败')}const result=await response.json();state.revision=result.revision;state.selected_ids=result.selected_ids;state.state=result.state;for(const item of state.items)item.selected=result.selected_ids.includes(item.id);syncSelection()}
+  catch(error){try{await load()}catch{}statusText('本次更改未保存：'+error.message+'。请重新勾选。',true)}finally{saving=false}}
+if(location.protocol==='file:')statusText('请通过 Codex 打开的本地选择链接使用本页，以便保存勾选。',true);else load().catch(error=>statusText(error.message+'。请回到 Codex 重新打开选择页。',true));
+</script>
+</html>

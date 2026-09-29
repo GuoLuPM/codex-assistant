@@ -21,10 +21,12 @@ def add_parser(commands):
     parser.add_argument("--skill-dir", type=Path)
 
 
-def invocation(args):
+def invocation(args, catalog_script=None):
     if args.map and not args.input:
         raise ValueError("ppt --map requires --input")
     params = {"IndexDir": str(args.index_dir.resolve())}
+    if catalog_script:
+        params["CatalogScript"] = str(Path(catalog_script).resolve())
     for key, value in {"ProductIds": args.ids, "PriceFields": args.price_fields}.items():
         if value:
             params[key] = value
@@ -51,10 +53,10 @@ try {
     return base64.b64encode(script.encode("utf-16-le")).decode("ascii")
 
 
-def run(args):
+def run(args, catalog_script=None):
     if os.name != "nt":
         raise ValueError("PPT export currently requires Windows and the Codex presentation runtime")
     shell = shutil.which("pwsh") or shutil.which("powershell")
     if not shell:
         raise ValueError("PowerShell not found")
-    return subprocess.run([shell, "-NoProfile", "-NonInteractive", "-EncodedCommand", invocation(args)], check=False).returncode
+    return subprocess.run([shell, "-NoProfile", "-NonInteractive", "-EncodedCommand", invocation(args, catalog_script)], check=False).returncode

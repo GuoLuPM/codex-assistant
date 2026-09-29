@@ -2,6 +2,13 @@
   "version": 1,
   "tools": [
     {
+      "id": "pool",
+      "summary": "持续加入各类文件或单品，按价格、品类、场景检索产品池，HTML 勾选后生成 PPT。",
+      "tags": ["产品池", "数据库", "选品", "场景", "送礼", "价格", "产品", "pdf", "pptx", "xlsx", "html", "catalog"],
+      "entrypoint": "catalog_tool/pool.py",
+      "guide": "catalog_tool/POOL_WORKFLOW.md"
+    },
+    {
       "id": "catalog",
       "summary": "XLSX 产品观察、增量检索、选品与可追溯 PPT 图册。",
       "tags": ["xlsx", "excel", "ppt", "产品", "报价", "选品", "图册", "catalog"],

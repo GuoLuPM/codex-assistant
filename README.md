@@ -3,12 +3,17 @@
 供 Codex 调用的本地工具库。用户描述需求，Codex 找到能力、读取必要说明并调用脚本。脚本处理确定性工作，完整业务数据留在本机。
 
 ```powershell
-./assistant.ps1 list --query 'xlsx'
-./assistant.ps1 describe catalog
-./assistant.ps1 run catalog search --query '耳机' --limit 5
+./assistant.ps1 list --query '产品池'
+./assistant.ps1 describe pool
+./assistant.ps1 run pool search --query '耳机' --limit 5
 ```
 
-当前能力：**catalog** — XLSX 有界观察、结构映射、增量检索、选品、生成有来源校验的 PPT。首次使用先读 [短流程](catalog_tool/WORKFLOW.md)，不必通读实现。默认交付一份 `outputs/产品图册.pptx`。
+当前能力：
+
+- **pool** — 多格式文件持续加入产品池，内容去重，按价格/品类/推荐场景检索，HTML 勾选后生成 PPT。读 [产品池短流程](catalog_tool/POOL_WORKFLOW.md)。
+- **catalog** — 既有 XLSX 坐标映射、增量检索与图册流程。读 [catalog 短流程](catalog_tool/WORKFLOW.md)。
+
+两者共用检索和生成引擎，默认最终交付一份 `outputs/产品图册.pptx`。业务数据与推荐判断分开保存，完整记录不需要穿过模型上下文。
 
 ## 文档按任务加载
 

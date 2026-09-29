@@ -5,6 +5,7 @@ param(
     [string]$OutputFile,
     [string]$ConfigFile,
     [string]$CatalogConfigFile,
+    [string]$CatalogScript = (Join-Path $PSScriptRoot 'catalog.py'),
     [Parameter(ParameterSetName = 'Source')][string]$ImportMap,
     [string]$IndexDir = (Join-Path $PSScriptRoot '..\.catalog-index'),
     [string[]]$PriceFields,
@@ -65,7 +66,7 @@ $env:RUNTIME_NODE = $node
 $env:RUNTIME_PYTHON = $python
 $env:RUNTIME_BIN_DIR = $bin
 $env:PRESENTATION_SKILL_DIR = $SkillDir
-$catalogScript = Join-Path $PSScriptRoot 'catalog.py'
+$catalogScript = (Resolve-Path -LiteralPath $CatalogScript).Path
 $catalogArgs = @('--index-dir', $IndexDir)
 if ($CatalogConfigFile) { $catalogArgs += @('--config', $CatalogConfigFile) }
 if ($InputFile) {

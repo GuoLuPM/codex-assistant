@@ -4,7 +4,7 @@
 
 ## 决策
 
-保留 **Codex 做语义判断 + 本地脚本执行确定性工作**。项目命名 `assistant`，GitHub 仓库命名 `codex-assistant`。目前唯一业务能力为 `catalog`；已有源码继续放在 `catalog_tool/`，避免为了目录整齐引入导入路径和行为变更。
+保留 **Codex 做语义判断 + 本地脚本执行确定性工作**。项目命名 `assistant`，GitHub 仓库命名 `codex-assistant`。`catalog` 用于既有 XLSX 图册；`pool` 负责持续、多格式、语义标签与交互选品，共用同一检索和 PPT 引擎。产品能力源码集中在 `catalog_tool/`。
 
 | 方案 | 适用与取舍 |
 | --- | --- |
@@ -46,6 +46,7 @@ flowchart LR
 - `tools.json` 是唯一能力目录：`version:1`；每项只含 `id/summary/tags/entrypoint/guide`。summary 最多 160 字符、tags 最多 12 项；路径必须指向项目内文件。
 - 入口以项目为 cwd，用当前 Python 启动登记的 CLI，不拼 shell 字符串。其他语言通过能力自己的 Python 薄适配器调用。返回退出码和有界结果；完整文件留在本地。
 - `catalog.py ppt` 仅通过 JSON 数据参数调用已有 `run.ps1`，后者仍唯一负责暂存、构建、校验和替换；不再实现一套 PPT 管线。
+- `pool` 用原件哈希和记录定位保存长期产品，不依赖上传文件继续存在；选择页只保存选中项，语义判断仍由 Codex 承担。新增数据管理合同见 [产品池](PRODUCT_POOL.md)。
 - `scripts/audit_public.py` 是共享发布检查；业务能力不拥有仓库发布语义。历史命令保留兼容入口。
 
 ## 渐进式披露合同
