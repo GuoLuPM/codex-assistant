@@ -4,6 +4,17 @@
 
 新 Windows 可直接下载 [Releases 安装包](https://github.com/GuoLuPM/codex-assistant/releases/latest)，包含独立 Python 和基础依赖；[对接文档与转发提示词](docs/WINDOWS_RELEASE.md) 说明如何接通本机 Codex 的 PPT 组件。
 
+## 选一个使用档位
+
+| 档位 | 主负责 | 需要时协助 |
+| --- | --- | --- |
+| **正常（默认）** | 最新 Sol | 最新 Terra |
+| **低消耗** | 最新 Terra | 最新 Luna |
+
+可以直接说“用正常档”或“用低消耗档”。各系列都选当前 Codex 可用的最新版，两档均不开快速模式，数据核验标准相同。档位不会自动切换聊天模型，Codex 会在需要时提示你切换；低消耗不承诺固定节省比例。执行细则见 [档位与分工](docs/AGENT_WORKFLOW.md)。
+
+## 开始使用
+
 ```powershell
 ./assistant.ps1 list --query '产品池'
 ./assistant.ps1 describe pool

@@ -2,6 +2,8 @@
 
 新设备、环境缺失或目录变动时读取。面向 Codex 执行；不需要用户自行掌握命令。项目建议 `D:\code\assistant`，可管理的运行时和缓存放 `D:\tools`。已有 Codex 自带运行时先复用，不强搬应用管理的文件。
 
+模型提供两档：正常（默认）用最新 Sol 主负责、最新 Terra 有限协助；低消耗整体降一档，用最新 Terra 主负责、最新 Luna 有限协助。都选本机 Codex 可用最新版、普通速度；用户选档时按 [档位与分工](AGENT_WORKFLOW.md) 核对实际聊天模型，不把安装工程当作已经切换模型。
+
 ## 取得工程
 
 - 新电脑优先使用 [Releases 的 Windows x64 安装包](https://github.com/GuoLuPM/codex-assistant/releases/latest)，包内含 Python、基础依赖、临时分享组件、校验清单及安装器；对接步骤和可转发提示词见 [Windows Release 对接](WINDOWS_RELEASE.md)。PDF 在目标机器下载，PPT 对接目标机器自己的 Codex 组件；分享网络排查读 [临时分享](TEMPORARY_SHARING.md)。
