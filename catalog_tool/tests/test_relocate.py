@@ -14,7 +14,7 @@ from catalog_store import Catalog
 class RelocateTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.base = Path(self.temp.name)
+        self.base = Path(self.temp.name).resolve()
         self.old = self.base / "old"
         self.new = self.base / "new"
         (self.old / "data").mkdir(parents=True)
