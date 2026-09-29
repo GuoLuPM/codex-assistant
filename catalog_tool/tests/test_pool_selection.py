@@ -130,7 +130,7 @@ class SelectionTests(unittest.TestCase):
                 url = json.loads(state_path.read_text(encoding='utf-8'))['url']
                 origin = url.split('/', 3)[:3]
                 headers = {'Origin': '/'.join(origin), 'Content-Type': 'application/json'}
-                with urlopen(Request(url + 'share/start', data=b'{"minutes":15}', headers=headers), timeout=2): pass
+                with urlopen(Request(url + 'share/start', data=b'{"minutes":null}', headers=headers), timeout=2): pass
                 while manager.state()['status'] != 'ready' and time.monotonic() < deadline: time.sleep(.02)
                 self.assertEqual(manager.state()['status'], 'ready')
                 self.selections.select(self.session, self.ids[:1], 0)

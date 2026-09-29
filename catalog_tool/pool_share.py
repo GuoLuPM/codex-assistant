@@ -7,6 +7,11 @@ from pool_share_view import public_server
 from pool_tunnel import open_tunnel, probe_public
 
 
+def validate_minutes(minutes):
+    if minutes is not None and (type(minutes) is not int or not 1 <= minutes <= 525600):
+        raise ValueError('请填写有效时长，或选择永久')
+
+
 class ShareManager:
     def __init__(self, project, directory, tunnel_factory=open_tunnel, probe=probe_public):
         self.project, self.directory = Path(project), Path(directory)
@@ -14,7 +19,7 @@ class ShareManager:
         self.lock = threading.Lock()
         self.cancel = threading.Event()
         self.worker = self.view = None
-        self.result = {'status': 'idle', 'message': '分享后，别人只能查看本页商品'}
+        self.result = {'status': 'idle', 'message': ''}
 
     def state(self):
         with self.lock: return dict(self.result)
@@ -26,22 +31,21 @@ class ShareManager:
         with self.lock:
             if not self.cancel.is_set(): self.result = {'status': status, 'message': message}
 
-    def start(self, view, minutes=60):
-        if type(minutes) is not int or minutes not in (15, 60, 240):
-            raise ValueError('分享时长请选择 15 分钟、1 小时或 4 小时')
+    def start(self, view, minutes=None):
+        validate_minutes(minutes)
         with self.lock:
             if self.busy(): return dict(self.result)
             self.cancel = threading.Event()
             self.view = view
             self.view.expires_at = time.time() + 300
-            self.result = {'status': 'preparing', 'message': '正在准备只读分享…'}
+            self.result = {'status': 'preparing', 'message': '正在生成链接…'}
             self.worker = threading.Thread(target=self._run, args=(view, minutes), daemon=True)
             self.worker.start()
             return dict(self.result)
 
     def _run(self, view, minutes):
         server = serving = None
-        outcome = {'status': 'stopped', 'message': '已停止分享，原链接不能再查看'}
+        outcome = {'status': 'stopped', 'message': '已停止分享'}
         try:
             server = public_server(view)
             serving = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': .1}, daemon=True)
@@ -49,7 +53,7 @@ class ShareManager:
             target = f'http://127.0.0.1:{server.server_port}'
             with self.tunnel_factory(target, self.project, self.directory, self.cancel, self.progress) as (host, process, proxy):
                 url = host + view.prefix
-                self.progress('checking', '正在确认别人能否打开…')
+                self.progress('checking', '正在生成链接…')
                 deadline = time.monotonic() + 65
                 while not self.cancel.is_set():
                     if process.poll() is not None: raise ValueError('分享连接中断了，请重新分享')
@@ -57,14 +61,14 @@ class ShareManager:
                     if time.monotonic() >= deadline: raise ValueError('外网访问验证未通过，请检查网络后重试')
                     self.cancel.wait(1)
                 if self.cancel.is_set(): return
-                view.expires_at = time.time() + minutes * 60
+                view.expires_at = None if minutes is None else time.time() + minutes * 60
                 with self.lock:
                     if self.cancel.is_set(): return
-                    self.result = {'status': 'ready', 'message': '链接准备好了，别人只能查看', 'url': url,
+                    self.result = {'status': 'ready', 'message': '链接已生成', 'url': url,
                                    'expires_at': view.expires_at, 'minutes': minutes}
                 while not self.cancel.wait(.2):
-                    if time.time() >= view.expires_at:
-                        outcome = {'status': 'expired', 'message': '分享已到期，原链接不能再查看'}
+                    if view.expires_at is not None and time.time() >= view.expires_at:
+                        outcome = {'status': 'expired', 'message': '分享已到期'}
                         break
                     if process.poll() is not None: raise ValueError('分享连接中断了，请重新分享')
         except InterruptedError:
@@ -79,7 +83,7 @@ class ShareManager:
             if server: server.shutdown();server.server_close()
             if serving: serving.join(timeout=2)
             with self.lock:
-                if self.cancel.is_set(): outcome = {'status': 'stopped', 'message': '已停止分享，原链接不能再查看'}
+                if self.cancel.is_set(): outcome = {'status': 'stopped', 'message': '已停止分享'}
                 self.result = outcome
 
     def stop(self):

@@ -55,7 +55,8 @@ def open_tunnel(target, project, directory, cancel, progress):
     lines = collections.deque(maxlen=80)
     try:
         environment = {k: v for k, v in os.environ.items() if not k.startswith(('TUNNEL_', 'CLOUDFLARE_'))}
-        command = [str(binary), 'tunnel', '--config', str(config), '--no-autoupdate', '--protocol', 'http2',
+        # Skip optional broad diagnostics; readiness still requires our real HTTPS probe.
+        command = [str(binary), 'tunnel', '--config', str(config), '--no-autoupdate', '--no-prechecks', '--protocol', 'http2',
                    '--quick-service', service, '--url', target, '--http-host-header', target.removeprefix('http://')]
         process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                    text=True, encoding='utf-8', errors='replace', env=environment,
@@ -64,7 +65,7 @@ def open_tunnel(target, project, directory, cancel, progress):
         def read():
             for line in process.stdout: lines.append(line.rstrip()[:1500])
         reader = threading.Thread(target=read, daemon=True);reader.start()
-        progress('connecting', '正在连接临时分享服务…')
+        progress('connecting', '正在生成链接…')
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline and not cancel.wait(.15):
             if process.poll() is not None: raise ValueError('临时链接申请失败，请检查网络和代理后重试')

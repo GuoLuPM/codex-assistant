@@ -12,7 +12,7 @@ from urllib.request import urlopen
 
 from pool_selection import Selections
 from pool_store import Pool, encoded
-from pool_share import ShareManager
+from pool_share import ShareManager, validate_minutes
 from pool_share_view import PublicView
 
 
@@ -52,7 +52,7 @@ def server_for(pool, session_id, port=0):
                 page = pool.root / "sessions" / session_id / "index.html"
                 return self.reply(200, page.read_bytes(), "text/html; charset=utf-8")
             if relative == "state":
-                return self.reply(200, {**selections.state(session_id, include_items=True), 'sharing': True, 'server_version': 2})
+                return self.reply(200, {**selections.state(session_id, include_items=True), 'sharing': True, 'server_version': 3})
             if relative == 'share':
                 return self.reply(200, sharing.state())
             if relative.startswith("image/"):
@@ -81,8 +81,9 @@ def server_for(pool, session_id, port=0):
                     if route == 'share/stop':
                         if data != {}: raise ValueError('Expected empty stop request')
                         return self.reply(200, sharing.stop())
-                    if not isinstance(data, dict) or set(data) != {'minutes'} or type(data['minutes']) is not int or data['minutes'] not in (15, 60, 240):
-                        raise ValueError('分享时长请选择 15 分钟、1 小时或 4 小时')
+                    if not isinstance(data, dict) or set(data) != {'minutes'}:
+                        raise ValueError('请选择分享时长')
+                    validate_minutes(data['minutes'])
                     if selections.session(session_id)['state'] != 'open': raise ValueError('这次选择已结束，请重新打开候选页')
                     if sharing.busy(): return self.reply(200, sharing.state())
                     try:
@@ -147,7 +148,7 @@ def open_session(root, session_id):
         try:
             with urlopen(state["url"] + "state", timeout=1) as response:
                 data = json.load(response)
-                if data.get('session_id') == session_id and data.get('server_version') == 2:
+                if data.get('session_id') == session_id and data.get('server_version') == 3:
                     return state
         except OSError:
             pass  # Restart an explicitly unavailable local helper, retaining SQLite choices.

@@ -123,7 +123,8 @@ class PublicShareTests(unittest.TestCase):
             manager.stop();wait_for('stopped')
             self.assertNotIn('url', manager.state())
             self.assertEqual(len(exits), 1)
-            manager.start(PublicView(self.state, self.root), 15);wait_for('ready')
+            manager.start(PublicView(self.state, self.root), 90);wait_for('ready')
+            self.assertEqual(manager.state()['minutes'], 90)
             manager.view.expires_at = time.time() - 1;wait_for('expired')
             manager.start(PublicView(self.state, self.root), 15);wait_for('ready')
             child.dead = True;wait_for('failed')
@@ -147,6 +148,34 @@ class PublicShareTests(unittest.TestCase):
             self.assertNotIn('url', manager.state())
             self.assertFalse(manager.view.live())
         finally: manager.close()
+
+    def test_unlimited_share_has_no_deadline_but_can_be_stopped(self):
+        class Child:
+            def poll(self): return None
+        @contextlib.contextmanager
+        def tunnel(*args):
+            yield 'https://synthetic.trycloudflare.com', Child(), None
+        manager = ShareManager(self.root, self.root, tunnel_factory=tunnel, probe=lambda *args: True)
+        view = PublicView(self.state, self.root)
+        try:
+            manager.start(view)
+            deadline = time.monotonic() + 3
+            while manager.state()['status'] != 'ready' and time.monotonic() < deadline: time.sleep(.02)
+            self.assertEqual(manager.state()['status'], 'ready')
+            self.assertIsNone(manager.state()['minutes'])
+            self.assertIsNone(view.expires_at)
+            with patch('pool_share_view.time.time', return_value=time.time() + 20 * 365 * 86400):
+                self.assertTrue(view.live())
+            manager.stop()
+            self.assertFalse(view.live())
+        finally: manager.close()
+
+    def test_custom_duration_validation_does_not_turn_bad_values_into_unlimited(self):
+        from pool_share import validate_minutes
+        for value in (None, 1, 90, 600, 525600):
+            validate_minutes(value)
+        for value in (True, False, 0, -1, 1.5, '永久', '', 525601, float('inf')):
+            with self.subTest(value=value), self.assertRaises(ValueError): validate_minutes(value)
 
 
 if __name__ == '__main__': unittest.main()

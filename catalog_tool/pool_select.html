@@ -16,7 +16,8 @@ body{margin:0}
 .icon-button[data-active="true"]{background:#e5f0e8;border-color:var(--accent)}
 dialog{width:min(520px,calc(100% - 32px));max-height:calc(100% - 40px);padding:28px;border:1px solid #c9d6cc;border-radius:18px;color:#26352f;background:#fff;box-shadow:0 20px 70px #182b2330}
 dialog::backdrop{background:#20392d55}.dialog-heading{display:flex;align-items:center;justify-content:space-between;gap:18px}.dialog-heading h2{margin:0;font-size:26px}.dialog-heading .icon-button{border:0;width:44px;height:44px}
-.share-note{font-size:18px;line-height:1.8;color:#536359;margin:18px 0}.share-duration{display:flex;align-items:center;gap:16px;margin:20px 0;font-size:20px}
+.share-note{font-size:18px;line-height:1.7;color:#536359;margin:16px 0}.share-duration{margin:20px 0;font-size:20px}.duration-label{display:block;margin-bottom:12px}.duration-control{display:flex;gap:8px;align-items:center}.duration-control input{width:100%;text-align:center;min-width:0;font:inherit;font-size:22px;padding:12px 6px;border:1px solid #b9cabe;border-radius:8px}.duration-control button{flex-shrink:0}.duration-help{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;font-size:18px;color:#536359}.duration-help button{font:inherit;border:0;background:transparent;color:var(--accent);text-decoration:underline;cursor:pointer;min-height:44px;padding:8px}.share-footnote{margin:18px 0 0;font-size:16px;line-height:1.6;color:#536359}
+.duration-control button{font:inherit;font-size:26px}
 select,.share-link{font:inherit;font-size:18px;padding:12px;border:1px solid #b9cabe;border-radius:8px;min-width:0;background:#fff;color:inherit}
 .share-link{width:100%;margin:6px 0 16px}.share-message{font-size:20px;line-height:1.7;margin:20px 0 8px;overflow-wrap:anywhere}.share-expiry{font-size:18px;line-height:1.6;color:#536359;margin:0 0 18px}
 .share-buttons{display:flex;flex-wrap:wrap;gap:12px;margin-top:20px}.action-button{font:inherit;font-size:20px;min-height:52px;padding:10px 20px;border-radius:9px;border:1px solid #aabdac;background:#fff;color:#285f49;cursor:pointer}.action-button.primary{background:#285f49;border-color:#285f49;color:#fff}.action-button:disabled{opacity:.55;cursor:wait}
@@ -76,13 +77,18 @@ h2{font-size:24px;font-weight:650;line-height:1.5;margin:0 0 12px;overflow-wrap:
 </header>
 <main id="products" aria-label="候选产品" aria-busy="true"></main>
 <dialog id="share-dialog" aria-labelledby="share-title">
-  <div class="dialog-heading"><h2 id="share-title">分享给别人看</h2><button id="share-close" class="icon-button" type="button" aria-label="关闭分享窗口"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
-  <p class="share-note">分享本页的商品介绍和展示价，别人只能查看。<br>分享期间，请保持电脑开机联网。</p>
-  <label class="share-duration">有效时间<select id="share-duration"><option value="15">15 分钟</option><option value="60" selected>1 小时</option><option value="240">4 小时</option></select></label>
+  <div class="dialog-heading"><h2 id="share-title">分享商品</h2><button id="share-close" class="icon-button" type="button" aria-label="关闭分享窗口"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+  <p class="share-note">别人只能查看本页商品和价格。</p>
+  <div id="share-settings" class="share-duration">
+    <label class="duration-label" for="share-duration">有效时间</label>
+    <div class="duration-control"><button id="share-less" class="icon-button" type="button" aria-label="减少一小时">−</button><input id="share-duration" type="text" value="永久" maxlength="12" autocomplete="off" aria-describedby="duration-hint"><button id="share-more" class="icon-button" type="button" aria-label="增加一小时">＋</button></div>
+    <div class="duration-help"><span id="duration-hint">数字按小时计算</span><button id="share-forever" type="button">设为永久</button></div>
+  </div>
   <p id="share-message" class="share-message" role="status" aria-live="polite">正在读取…</p>
   <p id="share-expiry" class="share-expiry" hidden></p>
   <input id="share-link" class="share-link" aria-label="分享链接" readonly hidden>
-  <div class="share-buttons"><button id="share-copy" type="button" class="action-button primary" hidden>复制链接</button><button id="share-start" type="button" class="action-button primary" hidden>生成链接</button><button id="share-stop" type="button" class="action-button" hidden>停止分享</button></div>
+  <div class="share-buttons"><button id="share-copy" type="button" class="action-button primary" hidden>复制链接</button><button id="share-start" type="button" class="action-button primary" hidden>确认分享</button><button id="share-stop" type="button" class="action-button" hidden>停止分享</button></div>
+  <p class="share-footnote">分享时，电脑需保持开机联网。</p>
 </dialog>
 <script>
 const base=location.pathname.replace(/\/?$/,'/');
@@ -103,7 +109,7 @@ function renderProducts(){
   document.title=state.title;
   if(state.readonly){
     document.body.classList.add('readonly');document.querySelector('#share-dialog').remove();
-    document.querySelector('#instruction').textContent='这是分享给你看的商品，可向分享人了解详情。';
+    document.querySelector('#instruction').textContent='商品详情请联系分享人。';
     if(state.expires_at)document.querySelector('#instruction').append(element('span',' 本链接最多保留至 '+new Date(state.expires_at*1000).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+'。'));
   }else document.querySelector('#share-open').hidden=!state.sharing;
   const fragment=document.createDocumentFragment();
@@ -188,45 +194,70 @@ async function flush(){
 window.addEventListener('beforeunload',event=>{if(writing||dirty()){event.preventDefault();event.returnValue=''}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)flush()});
 const shareDialog=document.querySelector('#share-dialog'), shareMessage=document.querySelector('#share-message'), shareLink=document.querySelector('#share-link');
-let shareTimer, shareBusy=false;
+let shareTimer, shareBusy=false, shareStatus='idle';
+const shareDuration=document.querySelector('#share-duration');
+function readDuration(){
+  const value=shareDuration.value.trim();
+  if(value==='永久')return null;
+  const match=value.match(/^([1-9]\d{0,3})(?:\s*小时)?$/);
+  if(!match||Number(match[1])>8760)throw new Error('请填 1—8760 小时，或填“永久”');
+  return Number(match[1])*60;
+}
+function stepDuration(change){
+  let minutes;try{minutes=readDuration()}catch{shareDuration.focus();return}
+  shareDuration.value=String(minutes===null?1:Math.max(1,Math.min(8760,minutes/60+change)));
+  clearDurationError();
+}
+function clearDurationError(){if(shareMessage.dataset.durationError){shareMessage.hidden=true;delete shareMessage.dataset.durationError}}
 function showShare(info){
   const busy=['preparing','connecting','checking','ready','stopping'].includes(info.status), ready=info.status==='ready';
+  shareStatus=info.status;
+  delete shareMessage.dataset.durationError;
   shareMessage.textContent=info.message;
+  shareMessage.hidden=!info.message;
   document.querySelector('#share-open').dataset.active=String(ready);
-  document.querySelector('#share-duration').disabled=busy;
-  if(info.minutes)document.querySelector('#share-duration').value=String(info.minutes);
+  document.querySelector('#share-settings').hidden=busy;
+  if(ready)shareDuration.value=info.minutes===null?'永久':String(info.minutes/60);
   if(shareLink.value!==(info.url||''))shareLink.value=info.url||'';
   shareLink.hidden=!ready;document.querySelector('#share-copy').hidden=!ready;
   document.querySelector('#share-start').hidden=busy;
   document.querySelector('#share-stop').hidden=!busy;
   document.querySelector('#share-stop').disabled=info.status==='stopping';
   const expiry=document.querySelector('#share-expiry');expiry.hidden=!ready;
-  expiry.textContent=info.expires_at?'最晚 '+new Date(info.expires_at*1000).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+' 到期':'';
+  expiry.textContent=ready?(info.expires_at?new Date(info.expires_at*1000).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+' 到期':'永久 · 可随时停止'):'';
 }
-function shareError(error){shareMessage.textContent=error.status?error.message:'暂时连不上，请回聊天里让我检查一下。'}
-function pollShare(){clearTimeout(shareTimer);if(shareDialog.open)shareTimer=setTimeout(refreshShare,2000)}
+function shareError(error){shareMessage.hidden=false;shareMessage.textContent=error.status?error.message:'暂时连不上，请回聊天里让我检查一下。'}
+function pollShare(){clearTimeout(shareTimer);if(shareDialog.open&&['preparing','connecting','checking','ready','stopping'].includes(shareStatus))shareTimer=setTimeout(refreshShare,shareStatus==='ready'?2000:300)}
 async function refreshShare(){
   if(shareBusy){pollShare();return}
   try{showShare(await request('share'))}catch(error){shareError(error)}finally{pollShare()}
 }
 async function changeShare(action){
-  if(shareBusy)return;shareBusy=true;clearTimeout(shareTimer);
+  if(shareBusy)return;
+  let minutes;
+  if(action==='start'){try{minutes=readDuration()}catch(error){shareMessage.dataset.durationError='true';shareMessage.hidden=false;shareMessage.textContent=error.message;shareDuration.focus();return}}
+  shareBusy=true;clearTimeout(shareTimer);
   document.querySelector('#share-start').disabled=true;
-  try{showShare(await request('share/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(action==='start'?{minutes:Number(document.querySelector('#share-duration').value)}:{})}))}
+  try{showShare(await request('share/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(action==='start'?{minutes}:{})}))}
   catch(error){shareError(error);document.querySelector('#share-start').hidden=false}
   finally{shareBusy=false;document.querySelector('#share-start').disabled=false;pollShare()}
 }
 document.querySelector('#share-open').addEventListener('click',async()=>{
   shareDialog.showModal();
-  try{const info=await request('share');showShare(info);if(info.status==='idle')await changeShare('start');else pollShare()}
+  try{showShare(await request('share'));pollShare()}
   catch(error){shareError(error);document.querySelector('#share-start').hidden=false}
 });
 document.querySelector('#share-close').addEventListener('click',()=>shareDialog.close());
 shareDialog.addEventListener('close',()=>clearTimeout(shareTimer));
 document.querySelector('#share-start').addEventListener('click',()=>changeShare('start'));
+document.querySelector('#share-less').addEventListener('click',()=>stepDuration(-1));
+document.querySelector('#share-more').addEventListener('click',()=>stepDuration(1));
+document.querySelector('#share-forever').addEventListener('click',()=>{shareDuration.value='永久';clearDurationError()});
+shareDuration.addEventListener('input',clearDurationError);
+shareDuration.addEventListener('keydown',event=>{if(event.key==='ArrowUp'||event.key==='ArrowDown'){event.preventDefault();stepDuration(event.key==='ArrowUp'?1:-1)}});
 document.querySelector('#share-stop').addEventListener('click',()=>changeShare('stop'));
 document.querySelector('#share-copy').addEventListener('click',async()=>{
-  try{await navigator.clipboard.writeText(shareLink.value);shareMessage.textContent='链接已复制，可以发给别人了'}
+  try{await navigator.clipboard.writeText(shareLink.value);shareMessage.textContent='已复制，可以发给别人了'}
   catch{shareLink.focus();shareLink.select();shareMessage.textContent='请复制框里的链接，再发给别人。'}
 });
 if(location.protocol==='file:'){

@@ -44,7 +44,7 @@ class PublicView:
                 'selected_ids': [], 'revision': 0, 'items': self.items, 'expires_at': self.expires_at}
 
     def live(self):
-        return self.active.is_set() and time.time() < self.expires_at
+        return self.active.is_set() and (self.expires_at is None or time.time() < self.expires_at)
 
 
 def public_server(view):
