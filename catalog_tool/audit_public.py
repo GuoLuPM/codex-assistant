@@ -43,7 +43,7 @@ def findings(data, location):
 def private_path(name):
     path = Path(name)
     return (path.suffix.lower() in PRIVATE_SUFFIXES or name.endswith(".local.json")
-            or path.name.startswith(".env") or any(part.startswith(".catalog") or part == "outputs" for part in path.parts))
+            or path.name.startswith(".env") or any(part.startswith(".catalog") or part in {"outputs", "data"} for part in path.parts))
 
 
 def audit():

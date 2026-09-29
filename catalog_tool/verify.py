@@ -26,8 +26,9 @@ def verify(work_dir: Path, output: Path):
         item = products[meta["product_id"]]
         texts = [shape.text for shape in slide.shapes if shape.has_text_frame and shape.text]
         title = re.sub(r"\s+", " ", item["name"]).strip()
-        if item["model"] is not None and str(item["model"]).strip() and str(item["model"]) not in title:
-            title += " / " + re.sub(r"\s+", " ", str(item["model"])).strip()
+        for value in (item.get("model"), item.get("variant")):
+            if value is not None and str(value).strip() and str(value) not in title:
+                title += " / " + re.sub(r"\s+", " ", str(value)).strip()
         assert texts[0] == title, (meta, "product name")
         assert f"序号 {item['serial'] if item['serial'] is not None else '未提供'}" in texts, (meta, "serial")
         prices = item["display_prices"]

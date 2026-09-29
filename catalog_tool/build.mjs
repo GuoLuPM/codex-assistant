@@ -98,8 +98,10 @@ for (const item of products) {
     if (thumbImage) slide.images.add({ blob: await fs.readFile(thumbImage), contentType: mime(thumbImage),
       alt: `包装图：${item.name}`, fit: "contain", position: { left: 30, top: 29, width: 104, height: 104 } });
     let title = String(item.name).replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
-    if (item.model != null && String(item.model).trim() && !title.includes(String(item.model))) {
-      title += ` / ${String(item.model).replace(/\s+/g, " ").trim()}`;
+    for (const value of [item.model, item.variant]) {
+      if (value != null && String(value).trim() && !title.includes(String(value))) {
+        title += ` / ${String(value).replace(/\s+/g, " ").trim()}`;
+      }
     }
     addText(slide, title, { left: thumbImage ? 155 : 30, top: 28,
       width: hasImage ? (thumbImage ? 825 : 950) : 730, height: 108 }, 34, { bold: true });

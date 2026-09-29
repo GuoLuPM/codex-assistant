@@ -9,8 +9,9 @@ import sqlite3
 import time
 import unicodedata
 from pathlib import Path
+from collections import Counter
 
-IMPORT_VERSION = 1  # Increment when extraction semantics change; existing sources become stale.
+IMPORT_VERSION = 4  # Coordinate maps, variant identities and semantic field provenance.
 
 def normalize(value):
     return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", str(value or "")).casefold()).strip()
@@ -48,6 +49,13 @@ def check_sources(items):
             raise ValueError(f"Source changed or missing (stale selection): {path.name}; run index and search again")
 
 
+def resolve_price(prices, field):
+    if field in prices:
+        return prices[field]
+    matches = [price for price in prices.values() if price["label"] == field]
+    return matches[0] if len(matches) == 1 else None
+
+
 class Catalog:
     def __init__(self, root, config=None):
         self.root = Path(root).resolve()
@@ -59,12 +67,14 @@ class Catalog:
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA foreign_keys=ON")
         version = self.db.execute("PRAGMA user_version").fetchone()[0]
-        if version not in (0, 1):
+        if version not in (0, 1, 2):
             raise ValueError(f"Unsupported index schema {version}; migrate before continuing")
+        if version == 1:
+            self.db.execute("ALTER TABLE sources ADD COLUMN mapping_path TEXT")
         self.db.executescript("""
             CREATE TABLE IF NOT EXISTS sources (
               path TEXT PRIMARY KEY, hash TEXT NOT NULL, size INTEGER, mtime INTEGER,
-              config_hash TEXT, indexed_at REAL);
+              config_hash TEXT, indexed_at REAL, mapping_path TEXT);
             CREATE TABLE IF NOT EXISTS products (
               pk INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
               source_path TEXT NOT NULL REFERENCES sources(path) ON DELETE CASCADE,
@@ -79,7 +89,7 @@ class Catalog:
               field TEXT, label TEXT, amount REAL, PRIMARY KEY(product_pk, field));
             CREATE INDEX IF NOT EXISTS prices_amount ON prices(field, amount, product_pk);
             CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name_terms, all_terms);
-            PRAGMA user_version=1;
+            PRAGMA user_version=2;
         """)
 
     def close(self):
@@ -94,7 +104,7 @@ class Catalog:
                         item[f"{key}_origin"] = "config"
         if item.get("category"):
             item["category"] = str(item["category"])
-            item["category_origin"] = "source"
+            item.setdefault("category_origin", "source")
         else:
             item["category"], item["category_origin"] = "未分类", "missing"
             for rule in self.config.get("category_rules", []):
@@ -108,22 +118,40 @@ class Catalog:
                 item["issues"].append(f"非数值价格:{price['label']}")
         return item
 
-    def index(self, paths=(), verify_hash=False, rebuild=False):
+    def _source_schema(self, source, mapping_path=None):
+        schema = dict(self.config)
+        for rule in self.config.get("source_schemas", []):
+            if fnmatch.fnmatch(Path(source).name, rule["match"]):
+                schema.update({key: value for key, value in rule.items() if key != "match"})
+        if mapping_path:
+            mapping_path = str(Path(mapping_path).resolve())
+            schema["mapping"] = json.loads(Path(mapping_path).read_text(encoding="utf-8-sig"))
+        signature = hashlib.sha256(json.dumps(
+            {"base": self.signature, "schema": schema}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        return schema, signature, mapping_path
+
+    def index(self, paths=(), verify_hash=False, rebuild=False, mapping_path=None):
         from extract import read_products
         paths = sorted({Path(p).resolve() for p in paths}, key=str)
         if not paths:
             paths = [Path(row[0]) for row in self.db.execute("SELECT path FROM sources ORDER BY path")]
         if not paths:
             raise ValueError("No sources registered; provide XLSX files or a directory")
+        if mapping_path and len(paths) != 1:
+            raise ValueError("--map applies to exactly one source workbook")
         started = time.perf_counter()
         result = {"updated": 0, "skipped": 0, "products_read": 0, "skipped_sheets": []}
+        missing, unmapped, warnings = {"prices": 0, "details": 0, "images": 0}, {}, Counter()
         with self.db:
             for source in paths:
                 if not source.is_file():
                     raise ValueError(f"Source missing: {source}; remove it from index explicitly")
                 stat = source.stat()
                 old = self.db.execute("SELECT * FROM sources WHERE path=?", (str(source),)).fetchone()
-                unchanged_config = not rebuild and old is not None and old["config_hash"] == self.signature
+                schema, signature, saved_map = self._source_schema(source, mapping_path or (old["mapping_path"] if old else None))
+                unchanged_config = not rebuild and old is not None and old["config_hash"] == signature
+                if old and old["mapping_path"] != saved_map:
+                    self.db.execute("UPDATE sources SET mapping_path=? WHERE path=?", (saved_map, str(source)))
                 if unchanged_config and not verify_hash and old["size"] == stat.st_size and old["mtime"] == stat.st_mtime_ns:
                     result["skipped"] += 1
                     continue
@@ -131,26 +159,37 @@ class Catalog:
                     self.db.execute("UPDATE sources SET size=?,mtime=? WHERE path=?", (stat.st_size, stat.st_mtime_ns, str(source)))
                     result["skipped"] += 1
                     continue
-                schema = dict(self.config)
-                for rule in self.config.get("source_schemas", []):
-                    if fnmatch.fnmatch(source.name, rule["match"]):
-                        schema.update({key: value for key, value in rule.items() if key != "match"})
-                items, skipped = read_products(source, self.root / "assets", schema)
+                try:
+                    items, skipped = read_products(source, self.root / "assets", schema)
+                except ValueError as error:
+                    raise ValueError(f"{source.name}: {error}") from error
                 self.db.execute("DELETE FROM products_fts WHERE rowid IN (SELECT pk FROM products WHERE source_path=?)", (str(source),))
                 self.db.execute("DELETE FROM sources WHERE path=?", (str(source),))
-                self.db.execute("INSERT INTO sources VALUES (?,?,?,?,?,?)", (
-                    str(source), items[0]["source_hash"], stat.st_size, stat.st_mtime_ns, self.signature, time.time()))
+                self.db.execute("INSERT INTO sources VALUES (?,?,?,?,?,?,?)", (
+                    str(source), items[0]["source_hash"], stat.st_size, stat.st_mtime_ns, signature, time.time(), saved_map))
                 for item in items:
                     self._insert(self._decorate(item))
+                    for kind, absent in (("prices", all(p["value"] is None for p in item["prices"].values())), ("details", not item["features"]),
+                                         ("images", not item["product_image"] and not item["package_image"])):
+                        missing[kind] += int(absent)
+                    warnings.update(issue.split(":", 1)[0] for issue in item["issues"])
+                    if item["unmapped_fields"]:
+                        unmapped.setdefault((source.name, item["sheet"]), set()).update(item["unmapped_fields"])
                 result["updated"] += 1
                 result["products_read"] += len(items)
                 result["skipped_sheets"].extend(f"{source.name}/{name}" for name in skipped)
         result["elapsed_ms"] = round((time.perf_counter() - started) * 1000, 1)
+        if result["updated"]:
+            result["missing_fields"] = missing
+            result["warning_counts"] = dict(warnings)
+            result["unmapped_group_count"] = len(unmapped)
+            result["unmapped_headers"] = [{"source": key[0], "sheet": key[1], "fields": sorted(value)}
+                                          for key, value in list(unmapped.items())[:10]]
         return result
 
     def _insert(self, item):
-        title = normalize(" ".join(str(item.get(key) or "") for key in ("name", "model")))
-        all_text = normalize(" ".join(str(item.get(key) or "") for key in ("name", "model", "features", "category", "brand", "supplier")))
+        title = normalize(" ".join(str(item.get(key) or "") for key in ("name", "model", "variant")))
+        all_text = normalize(" ".join(str(item.get(key) or "") for key in ("name", "model", "variant", "features", "category", "brand", "supplier")))
         pk = self.db.execute("""INSERT INTO products
             (id,source_path,sheet,source_row,name,name_norm,all_norm,category,category_origin,brand,supplier,has_image,payload)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""", (
@@ -158,8 +197,12 @@ class Catalog:
                 item["category"], item["category_origin"], item["brand"], item["supplier"],
                 int(bool(item["product_image"] or item["package_image"])), json.dumps(item, ensure_ascii=False))).lastrowid
         price_entries = {}
+        labels = Counter(price["label"] for price in item["prices"].values())
         for field, price in item["prices"].items():
-            for key in {field, price["label"]}:
+            keys = {field}
+            if labels[price["label"]] == 1 and price["label"] not in item["prices"]:
+                keys.add(price["label"])
+            for key in keys:
                 price_entries[key] = (price["label"], parse_price(price["value"]))
         self.db.executemany("INSERT INTO prices VALUES (?,?,?,?)",
                             [(pk, field, label, amount) for field, (label, amount) in price_entries.items()])
@@ -173,13 +216,15 @@ class Catalog:
             try:
                 stat = path.stat()
                 current = (stat.st_size, stat.st_mtime_ns) == (source["size"], source["mtime"])
-            except OSError:
+                _, signature, _ = self._source_schema(path, source["mapping_path"])
+                current = current and source["config_hash"] == signature
+            except (OSError, ValueError):
                 current = False
-            if not current or source["config_hash"] != self.signature:
+            if not current:
                 stale.append(source["path"])
         return stale
 
-    def search(self, query="", price_field=None, minimum=None, maximum=None, category=None,
+    def search(self, query="", price_field=None, minimum=None, maximum=None, category=None, source=None,
                brand=None, supplier=None, scope="name", exclude=(), has_image=False,
                limit=10, offset=0, sort="relevance"):
         started = time.perf_counter()
@@ -223,6 +268,9 @@ class Catalog:
         if category:
             where.append("(p.category=? OR substr(p.category,1,?)=?)")
             args.extend([category, len(category) + 1, category + "/"])
+        if source:
+            where.append("p.source_path=?")
+            args.append(str(Path(source).resolve()))
         for key, value in (("brand", brand), ("supplier", supplier)):
             if value:
                 where.append(f"p.{key}=?")
@@ -244,14 +292,15 @@ class Catalog:
             result = {"id": item["id"], "name": item["name"], "category": item["category"],
                       "category_origin": item["category_origin"],
                       "source": [item["source_file"], item["sheet"], item["row"]]}
-            for key in ("model", "brand", "supplier"):
+            for key in ("model", "variant", "brand", "supplier"):
                 if item.get(key):
                     result[key] = item[key]
             if price_field:
-                price = item["prices"].get(price_field) or next((p for p in item["prices"].values() if p["label"] == price_field), None)
+                price = resolve_price(item["prices"], price_field)
                 result["price"] = price or {"label": price_field, "value": None}
             else:
-                result["prices"] = {p["label"]: p["value"] for p in item["prices"].values()}
+                # Canonical roles remain distinct even when source labels repeat.
+                result["prices"] = item["prices"]
             if item["issues"]:
                 result["warning_count"] = len(item["issues"])
             if scope == "all" and terms and any(term not in row["name_norm"] for term in terms):
@@ -290,37 +339,58 @@ class Catalog:
             if price_fields:
                 display = []
                 for key in price_fields:
-                    price = prices.get(key) or next((p for p in prices.values() if p["label"] == key), None)
+                    price = resolve_price(prices, key)
                     if price is None:
-                        raise ValueError(f"Selected price field {key} absent for {item['id']}")
+                        raise ValueError(f"Selected price field {key} absent or ambiguous for {item['id']}; choose a canonical price role")
                     display.append(price)
                 item["display_prices"] = display
             else:
                 item["display_prices"] = list(prices.values()) or [{"label": "价格", "value": None}]
             if len(item["display_prices"]) > 2:
                 raise ValueError("More than 2 price columns; choose --price-fields explicitly")
+            if any(price.get("error") for price in item["display_prices"]):
+                raise ValueError(f"Selected price has a spreadsheet error for {item['id']}; repair source or choose another price role")
         work_dir = Path(work_dir)
         work_dir.mkdir(parents=True, exist_ok=True)
         (work_dir / "catalog-data.json").write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
         return {"selected": len(items)}
 
     def stats(self):
+        price_fields = self.facets("price")
         return {"products": self.db.execute("SELECT count(*) FROM products").fetchone()[0],
                 "sources": self.db.execute("SELECT count(*) FROM sources").fetchone()[0],
                 "category_count": self.db.execute("SELECT count(DISTINCT category) FROM products").fetchone()[0],
                 "categories": self.facets("category")["items"],
-                "price_fields": [dict(row) for row in self.db.execute("SELECT field,label,count(amount) AS numeric_count FROM prices GROUP BY field,label ORDER BY field")],
+                "price_field_count": price_fields["total"],
+                "price_fields": price_fields["items"],
+                "price_fields_more": price_fields["total"] > price_fields["limit"],
                 "stale_sources": [Path(x).name for x in self.stale_sources()]}
 
+    def sources(self, limit=10, offset=0):
+        if not 1 <= limit <= 50 or offset < 0:
+            raise ValueError("Invalid source pagination")
+        stale = set(self.stale_sources())
+        rows = self.db.execute("""SELECT s.path,s.mapping_path,count(p.pk) AS products FROM sources s
+            LEFT JOIN products p ON p.source_path=s.path GROUP BY s.path ORDER BY s.path LIMIT ? OFFSET ?""", (limit, offset))
+        return {"total": self.db.execute("SELECT count(*) FROM sources").fetchone()[0], "offset": offset, "limit": limit,
+                "items": [{**dict(row), "stale": row["path"] in stale} for row in rows]}
+
     def facets(self, field, query="", limit=20, offset=0):
-        if field not in {"category", "brand", "supplier"}:
-            raise ValueError("Facet field must be category, brand or supplier")
+        if field not in {"category", "brand", "supplier", "price"}:
+            raise ValueError("Facet field must be category, brand, supplier or price")
         if not 1 <= limit <= 50 or offset < 0 or len(query) > 160:
             raise ValueError("Invalid facet limit/offset/query")
-        base = f" FROM products WHERE {field}<>'' AND instr({field},?)>0 GROUP BY {field}"
-        total = self.db.execute("SELECT count(*) FROM (SELECT 1" + base + ")", (query,)).fetchone()[0]
-        rows = self.db.execute(f"SELECT {field} AS value,count(*) AS count" + base + " ORDER BY count DESC,value LIMIT ? OFFSET ?",
-                               (query, limit, offset))
+        if field == "price":
+            base = " FROM prices WHERE instr(field,?)>0 OR instr(label,?)>0 GROUP BY field,label"
+            params = (query, query)
+            projection, ordering = "field,label,count(amount) AS numeric_count", "field,label"
+        else:
+            base = f" FROM products WHERE {field}<>'' AND instr({field},?)>0 GROUP BY {field}"
+            params = (query,)
+            projection, ordering = f"{field} AS value,count(*) AS count", "count DESC,value"
+        total = self.db.execute("SELECT count(*) FROM (SELECT 1" + base + ")", params).fetchone()[0]
+        rows = self.db.execute("SELECT " + projection + base + " ORDER BY " + ordering + " LIMIT ? OFFSET ?",
+                               (*params, limit, offset))
         return {"field": field, "total": total, "items": [dict(row) for row in rows], "offset": offset, "limit": limit}
 
     def remove_source(self, path):

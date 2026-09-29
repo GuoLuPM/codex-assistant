@@ -5,6 +5,7 @@ param(
     [string]$OutputFile,
     [string]$ConfigFile,
     [string]$CatalogConfigFile,
+    [Parameter(ParameterSetName = 'Source')][string]$ImportMap,
     [string]$IndexDir = (Join-Path $PSScriptRoot '..\.catalog-index'),
     [string[]]$PriceFields,
     [string]$RuntimeRoot = (Join-Path $env:USERPROFILE '.cache\codex-runtimes\codex-primary-runtime\dependencies'),
@@ -59,7 +60,9 @@ $catalogScript = Join-Path $PSScriptRoot 'catalog.py'
 $catalogArgs = @('--index-dir', $IndexDir)
 if ($CatalogConfigFile) { $catalogArgs += @('--config', $CatalogConfigFile) }
 if ($InputFile) {
-    & $python $catalogScript @catalogArgs index $source
+    $indexArgs = @('index', $source)
+    if ($ImportMap) { $indexArgs += @('--map', $ImportMap) }
+    & $python $catalogScript @catalogArgs @indexArgs
     if ($LASTEXITCODE -ne 0) { throw 'Source indexing failed.' }
     $stageArgs = @('stage-source', '--input', $source, '--work-dir', $workDir)
 } else {

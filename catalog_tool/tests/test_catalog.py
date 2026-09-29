@@ -51,6 +51,8 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(self.catalog.search(category="家居")["total"], 1)
         self.assertEqual(self.catalog.facets("category", "数码", limit=1)["total"], 2)
         self.assertEqual(len(self.catalog.facets("category", "数码", limit=1)["items"]), 1)
+        self.assertEqual(len(self.catalog.facets("price", "价", limit=1)["items"]), 1)
+        self.assertGreater(self.catalog.facets("price", "价", limit=1)["total"], 1)
         with self.assertRaisesRegex(ValueError, "price.field"):
             self.catalog.search(minimum=80)
 

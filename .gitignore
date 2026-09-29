@@ -12,6 +12,7 @@
 *.webp
 *.zip
 outputs/
+data/
 .catalog-build/
 .catalog-work/
 

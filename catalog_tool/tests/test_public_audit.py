@@ -16,6 +16,7 @@ class PublicAuditTests(unittest.TestCase):
     def test_blocks_data_files_and_personal_email(self):
         self.assertTrue(private_path("nested/prices.xlsx"))
         self.assertTrue(private_path("catalog.local.json"))
+        self.assertTrue(private_path("data/customer-notes.txt"))
         self.assertFalse(private_path("catalog_tool/catalog.py"))
         self.assertTrue(allowed_email("123+example@users.noreply.github.com"))
         address = "private" + "@" + "mail.test"
