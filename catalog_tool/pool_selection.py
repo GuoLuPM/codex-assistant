@@ -3,6 +3,7 @@
 import json
 import secrets
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from catalog_store import resolve_price
@@ -64,6 +65,36 @@ class Selections:
         template = Path(__file__).with_name("pool_select.html").read_text(encoding="utf-8")
         (directory / "index.html").write_text(template, encoding="utf-8")
         return {"session_id": session_id, "candidates": len(ids), "html": str(directory / "index.html"), "next": "open --session " + session_id}
+
+    def recent(self, query="", state=None, limit=10, offset=0):
+        if type(limit) is not int or type(offset) is not int or not 1 <= limit <= 50 or offset < 0:
+            raise ValueError("Invalid pagination")
+        if not isinstance(query, str) or len(query) > 160:
+            raise ValueError("Selection title query must be at most 160 characters")
+        if state not in (None, "open", "sealed", "closed"):
+            raise ValueError("Invalid selection state")
+        clauses, parameters = [], []
+        if query.strip():
+            clauses.append("instr(lower(s.title), lower(?)) > 0")
+            parameters.append(query.strip())
+        if state is not None:
+            clauses.append("s.state=?")
+            parameters.append(state)
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
+        total = self.db.execute("SELECT count(*) FROM pool_sessions s" + where, parameters).fetchone()[0]
+        rows = self.db.execute("""SELECT s.id AS session_id,s.title,s.state,s.created_at,s.price_fields,
+            (SELECT count(*) FROM pool_choices c WHERE c.session_id=s.id) AS candidates,
+            (SELECT count(*) FROM pool_choices c WHERE c.session_id=s.id AND c.selected=1) AS selected
+            FROM pool_sessions s""" + where + " ORDER BY s.created_at DESC,s.id DESC LIMIT ? OFFSET ?",
+            [*parameters, limit, offset])
+        items = []
+        for row in rows:
+            item = dict(row)
+            item["created_at_utc"] = datetime.fromtimestamp(item.pop("created_at"), timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+            item["price_fields"] = json.loads(item["price_fields"])
+            items.append(item)
+        return {"total": total, "offset": offset, "limit": limit, "items": items,
+                "next_offset": offset + len(items) if offset + len(items) < total else None}
 
     def session(self, session_id):
         row = self.db.execute("SELECT * FROM pool_sessions WHERE id=?", (session_id,)).fetchone()

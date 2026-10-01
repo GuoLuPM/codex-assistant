@@ -1,4 +1,6 @@
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -38,6 +40,73 @@ class SelectionTests(unittest.TestCase):
     def tearDown(self):
         self.pool.close()
         self.tmp.cleanup()
+
+    def session_cli(self, *arguments, index=None):
+        return subprocess.run([sys.executable, str(Path(__file__).resolve().parents[2] / 'assistant.py'),
+            'run', 'pool', '--index-dir', str(index or self.pool.root), 'sessions', *arguments],
+            env={**os.environ, 'PYTHONIOENCODING': 'cp1252'},
+            capture_output=True, text=True, encoding='utf-8')
+
+    def test_session_history_pages_readonly_summaries_without_access_tokens(self):
+        self.selections.rename(self.session, '先前的清单')
+        self.selections.select(self.session, self.ids[:1], 0)
+        second = self.selections.create(self.ids, ['零售价'], title='茶礼 100%')['session_id']
+        self.selections.select(second, self.ids, 0)
+        self.selections.seal(second)
+        third = self.selections.create(self.ids[:1], ['零售价'], title='办公室用品')['session_id']
+        with self.pool.db:
+            self.pool.db.executemany('UPDATE pool_sessions SET created_at=? WHERE id=?',
+                                    [(1, self.session), (2, second), (3, third)])
+            self.pool.db.execute("UPDATE pool_sessions SET state='closed' WHERE id=?", (third,))
+        before = list(self.pool.db.iterdump())
+        result = self.session_cli('--limit', '2')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        page = json.loads(result.stdout)
+        self.assertEqual((page['total'], page['offset'], page['next_offset']), (3, 0, 2))
+        self.assertEqual([r['session_id'] for r in page['items']], [third, second])
+        self.assertEqual([r['state'] for r in page['items']], ['closed', 'sealed'])
+        self.assertEqual([r['selected'] for r in page['items']], [0, 2])
+        self.assertEqual([r['candidates'] for r in page['items']], [1, 2])
+        self.assertEqual(page['items'][1]['created_at_utc'], '1970-01-01T00:00:02Z')
+        self.assertEqual(page['items'][1]['price_fields'], ['零售价'])
+        allowed = {'session_id', 'title', 'state', 'created_at_utc', 'price_fields', 'candidates', 'selected'}
+        for row in page['items']:
+            self.assertLessEqual(set(row), allowed)
+        for row in self.pool.db.execute('SELECT token FROM pool_sessions'):
+            self.assertNotIn(row['token'], result.stdout)
+        result = self.session_cli('--limit', '2', '--offset', '2')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        last = json.loads(result.stdout)
+        self.assertEqual([r['session_id'] for r in last['items']], [self.session])
+        self.assertIsNone(last['next_offset'])
+        self.assertEqual(list(self.pool.db.iterdump()), before)
+
+    def test_session_history_filters_literal_titles_and_states(self):
+        special = self.selections.create(self.ids, ['零售价'], title='Tea 100%_礼盒')['session_id']
+        other = self.selections.create(self.ids, ['零售价'], title='Tea 礼盒')['session_id']
+        with self.pool.db:
+            self.pool.db.execute("UPDATE pool_sessions SET state='closed' WHERE id=?", (other,))
+        cases = [(['--query', '%_'], [special]), (['--query', 'tea', '--state', 'closed'], [other]),
+                 (['--query', "%' OR 1=1 --"], []), (['--query', '不存在'], [])]
+        for args, expected in cases:
+            with self.subTest(args=args):
+                result = self.session_cli(*args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                page = json.loads(result.stdout)
+                self.assertEqual(page['total'], len(expected))
+                self.assertEqual([r['session_id'] for r in page['items']], expected)
+                self.assertIsNone(page['next_offset'])
+
+    def test_session_history_rejects_unbounded_requests_and_handles_empty_pool(self):
+        for args in (['--limit', '0'], ['--limit', '51'], ['--offset', '-1'], ['--query', '长' * 161]):
+            with self.subTest(args=args):
+                result = self.session_cli(*args)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(result.stdout.strip())
+        result = self.session_cli(index=self.root / 'empty-pool')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        page = json.loads(result.stdout)
+        self.assertEqual((page['total'], page['items'], page['next_offset']), (0, [], None))
 
     def test_rename_preserves_candidates_choices_and_revision(self):
         self.selections.select(self.session, self.ids[:1], 0)
