@@ -49,6 +49,19 @@ class TaskTests(unittest.TestCase):
         self.assertEqual(self.store.snapshot(tid)["state"], "interrupted")
         self.assertIsNone(self.store.snapshot(tid)["active_turn_id"])
 
+    def test_recovery_closes_uncertain_receipt_without_replaying_or_claiming_success(self):
+        tid = self.task['task_id']
+        action = {'task_id': tid, 'request_id': 'uncertain', 'expected_revision': 0,
+                  'kind': 'message', 'payload': {'text': '整理资料'}}
+        self.store.accept_action(action)
+        self.store.finish_action(tid, 'uncertain', 'pending', {'uncertain': True})
+        reopened = TaskStore(self.path)
+        reopened.recover()
+        receipt = reopened.accept_action(action)
+        self.assertEqual(receipt['state'], 'failed')
+        self.assertIn('核对', receipt['result']['error'])
+        self.assertEqual(reopened.snapshot(tid)['blocks'], [])
+
     def test_publishing_file_does_not_end_a_still_running_native_turn(self):
         tid = self.task['task_id']
         self.store.record(tid, 'turn_started', {'turn_id': 't1'})

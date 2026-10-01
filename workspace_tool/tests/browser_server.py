@@ -36,6 +36,13 @@ async def main():
         pool.close()
         service.store.add_ref(tid, 'session', sid, {'session_id': sid})
         service.store.record(tid, 'block', build_view(tid, {'kind': 'products', 'refs': {'session_id': sid}}, service.store, service.pool))
+        async def interrupted_export(task_id, session_id, revision, request_id):
+            # Exercise the real sealed-selection lifecycle without PPT dependencies.
+            db = Pool(service.pool.root)
+            try: Selections(db).seal(session_id)
+            finally: db.close()
+            await asyncio.Future()
+        service.pool.export = interrupted_export
         auth = LocalAuth(host)
         # The fixed bootstrap value exists only in this synthetic test process.
         auth._starts[digest('browser-fixture')] = auth.clock() + 3600

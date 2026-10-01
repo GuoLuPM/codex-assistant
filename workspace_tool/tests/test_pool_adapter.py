@@ -74,3 +74,34 @@ class PoolSeamTests(unittest.TestCase):
             result = subprocess.run([sys.executable, '-c', code, str(Path(__file__).resolve().parents[2] / 'catalog_tool'), str(self.root / 'pool')], capture_output=True, timeout=5)
             self.assertNotEqual(result.returncode, 0)
             self.assertNotIn(b'WRITTEN', result.stdout)
+
+    def test_reopen_preserves_selection_and_prices_without_mutating_sealed_history(self):
+        from workspace_tool.tasks import TaskStore
+        from workspace_tool.pool_adapter import PoolAdapter
+        store = TaskStore(self.root / 'tasks.db'); tid = store.create()['task_id']
+        sid = self.choices.create([self.pid], ['retail_price'])['session_id']
+        self.choices.select(sid, [self.pid], 0); self.choices.seal(sid)
+        store.add_ref(tid, 'session', sid, {'session_id': sid})
+        adapter = PoolAdapter(store, self.root / 'pool', self.root)
+        fresh = adapter.reopen(tid, sid, 'retry')
+        self.assertEqual(fresh, adapter.reopen(tid, sid, 'retry'))
+        state = adapter.state(tid, fresh['session_id'])
+        self.assertEqual(state['state'], 'open')
+        self.assertEqual(state['selected_ids'], [self.pid])
+        self.assertEqual(state['price_fields'], ['retail_price'])
+        self.assertEqual(self.choices.state(sid)['state'], 'sealed')
+
+    def test_visual_transcription_passes_through_registered_text_input(self):
+        from PIL import Image
+        from workspace_tool.tasks import TaskStore
+        from workspace_tool.pool_adapter import PoolAdapter
+        source = self.root / 'synthetic.png'
+        Image.new('RGB', (10, 10), 'white').save(source)
+        file_id = self.pool.add(source)['file_id']
+        image = next(e for e in self.pool.evidence(file_id) if e['kind'] == 'image')
+        store = TaskStore(self.root / 'tasks.db'); tid = store.create()['task_id']
+        adapter = PoolAdapter(store, self.root / 'pool', self.root)
+        payload = {'args': ['--file', file_id, '--image-ref', image['id'], '--reviewer', 'synthetic-test'], 'text': '合成测试图片的显式观察'}
+        result = adapter.execute(tid, 'observe', payload, 'observation1')
+        self.assertEqual(result, adapter.execute(tid, 'observe', payload, 'observation1'))
+        self.assertTrue(any(e.get('text') == payload['text'] for e in self.pool.evidence(file_id)))

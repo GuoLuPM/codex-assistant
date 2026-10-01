@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+import urllib.error
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,8 +26,13 @@ def control(state, action, *, method="GET"):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     request = urllib.request.Request(url + "/control/" + action, data=b"{}" if method == "POST" else None,
                                     headers={"X-Workspace-Control": state["control_token"], "Content-Type": "application/json"}, method=method)
-    with opener.open(request, timeout=2) as response:
-        return json.load(response)
+    try:
+        with opener.open(request, timeout=2) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as error:
+        try: message = json.load(error).get("error", "本机服务暂时无法完成这一步。")
+        except (ValueError, UnicodeError): message = "本机服务暂时无法完成这一步。"
+        raise ValueError(message) from error
 
 
 def launch(directory, pool_dir=None, codex_bin=None):
@@ -36,8 +42,22 @@ def launch(directory, pool_dir=None, codex_bin=None):
     with pool_lock(directory):
         if state_file.is_file():
             saved = json.loads(state_file.read_text(encoding="utf-8"))
+            configuration = saved.get("configuration", {})
+            pool_dir = pool_dir or configuration.get("pool_dir")
+            codex_bin = codex_bin or configuration.get("codex_bin")
             try:
-                return control(saved, "open", method="POST")
+                opened = control(saved, "open", method="POST")
+                readiness = opened.get("readiness", {})
+                if not readiness.get("error") and not (readiness.get("connected") and not readiness.get("logged_in")):
+                    return opened
+                # Restart only this registered service; its stop contract rejects
+                # active jobs/shares. Reopening now actually repairs native EOF.
+                control(saved, "stop", method="POST")
+                deadline = time.monotonic() + 10
+                while state_file.exists() and time.monotonic() < deadline:
+                    time.sleep(.1)
+                if state_file.exists():
+                    raise ValueError("工作台还在收尾，请稍后再打开。")
             except OSError:
                 # Confirm absence before replacing a registry for a live process.
                 if process_alive(saved.get("pid")):
@@ -103,7 +123,8 @@ async def serve(args):
     server = uvicorn.Server(config)
     service.shutdown = lambda: setattr(server, "should_exit", True)
     state_file = directory / "server.local.json"
-    state = {"pid": os.getpid(), "launch_id": args.launch_id, "origin": "http://" + host, "control_token": auth.control_token, "protocol": 1}
+    state = {"pid": os.getpid(), "launch_id": args.launch_id, "origin": "http://" + host, "control_token": auth.control_token, "protocol": 1,
+             "configuration": {"pool_dir": str(service.pool.root), "codex_bin": str(args.codex_bin.resolve()) if args.codex_bin else None}}
     temporary = state_file.with_suffix(".tmp")
     temporary.write_text(json.dumps(state), encoding="utf-8"); temporary.replace(state_file)
     try:

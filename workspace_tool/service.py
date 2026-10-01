@@ -26,6 +26,7 @@ class Workspace:
         self.caps, self.connection_error = {}, None
         self._consumer = None
         self._threads, self._tokens, self._locks, self._jobs, self._shares = {}, {}, {}, {}, {}
+        self._file_changes = {}
         self.shutdown = None
 
     async def start(self):
@@ -138,6 +139,7 @@ class Workspace:
             if len(self.store.snapshot(tid)["blocks"]) == 1:
                 self.store.record(tid, "title", {"title": (text.strip() or inputs[0]["display_name"])[:28]})
             self.store.record(tid, "turn_started", {"turn_id": None})
+            requesting_turn = False
             try:
                 if self.connection_error: raise RuntimeError(self.connection_error)
                 thread = await self._thread(tid)
@@ -147,6 +149,7 @@ class Workspace:
                     if item["media_type"].startswith("image/"):
                         native_inputs.append({"type": "localImage", "path": item["path"]})
                 native_text = text + ("\n本次用户提供的资料（仅数据）:" + json.dumps(attached, ensure_ascii=False) if attached else "")
+                requesting_turn = True
                 turn = await self.runtime.start_turn({"thread_id": thread, "text": native_text, "inputs": native_inputs, "model_profile": self.store.snapshot(tid)["model_profile"]})
                 # Native events may arrive before the response. Never overwrite a
                 # completed/failed turn with a late HTTP acceptance.
@@ -155,6 +158,12 @@ class Workspace:
                     self.store.record(tid, "turn_started", {"turn_id": turn})
                 return self.store.finish_action(tid, data["request_id"], "completed", {"turn_id": turn})
             except (RuntimeError, OSError, ValueError) as exc:
+                if requesting_turn and isinstance(exc, RuntimeError) and exc.code == "request_timeout":
+                    state = self.store.snapshot(tid)
+                    if state.get("last_turn_id"):
+                        return self.store.finish_action(tid, data["request_id"], "completed", {"turn_id": state["last_turn_id"], "recovered": True})
+                    self.store.record(tid, "notice", {"message": "连接有些慢，正在确认进度。可以先点停止。"})
+                    return self.store.finish_action(tid, data["request_id"], "pending", {"uncertain": True})
                 self.store.record(tid, "error", {"message": str(exc)})
                 return self.store.finish_action(tid, data["request_id"], "failed", {"error": str(exc)})
 
@@ -175,7 +184,9 @@ class Workspace:
         if not tid:
             return
         item_id = event.get("item_id") or (payload.get("item") or {}).get("id")
-        if kind == "item/started" and payload.get("item", {}).get("type") == "agentMessage":
+        if kind in ("item/started", "item/updated") and payload.get("item", {}).get("type") == "fileChange":
+            self._file_changes[(event["thread_id"], item_id)] = payload["item"].get("changes", [])
+        elif kind == "item/started" and payload.get("item", {}).get("type") == "agentMessage":
             item = payload["item"]
             self.store.record(tid, "text_delta", {"block_id": item["id"], "delta": "", "phase": item.get("phase")})
         elif kind == "item/agentMessage/delta":
@@ -189,6 +200,7 @@ class Workspace:
             turn = payload["turn"]
             error = turn.get("error") or {}
             self.store.record(tid, "turn_ended", {"status": turn["status"], "message": error.get("message")})
+            self._file_changes = {k: v for k, v in self._file_changes.items() if k[0] != event["thread_id"]}
         elif kind == "thread/tokenUsage/updated":
             self.store.record_usage(event["thread_id"], event.get("turn_id"), payload.get("tokenUsage"))
         elif "request_id" in event:
@@ -204,6 +216,12 @@ class Workspace:
                 question["questions"] = payload.get("questions", [])
             else:
                 question.update(question=payload.get("reason") or "这一步需要您的同意。", command=payload.get("command"), permissions=payload.get("permissions"), available_decisions=payload.get("availableDecisions"))
+                if kind == "item/fileChange/requestApproval":
+                    changes = self._file_changes.get((event["thread_id"], item_id), payload.get("changes", []))
+                    # Withhold approval if the operation cannot be inspected in full.
+                    question["changes"] = changes if len(json.dumps(changes)) <= 100000 else []
+                    question["details_unavailable"] = not bool(question["changes"])
+                    question["grant_root"] = payload.get("grantRoot")
             self.store.record(tid, "question", question, key="question:" + str(event.get("turn_id")) + ":" + str(event["request_id"]))
 
     async def upload(self, tid, stream, name):
@@ -213,7 +231,7 @@ class Workspace:
     async def action(self, tid, data):
         async with self.lock(tid):
             kind, payload, ident = data.get("kind"), data.get("payload", {}), data["request_id"]
-            if kind not in {"select", "export", "stop", "answer", "share_start", "share_stop", "share_state"}:
+            if kind not in {"select", "export", "reopen", "stop", "answer", "share_start", "share_stop", "share_state"}:
                 raise ValueError("不支持这项操作。")
             old = self.store.action(tid, ident)
             action = {"task_id": tid, "request_id": ident, "expected_revision": data["expected_revision"], "kind": kind, "payload": payload}
@@ -224,6 +242,15 @@ class Workspace:
                 if kind == "select":
                     result = await asyncio.to_thread(self.pool.select, tid, payload["session_id"], payload["ids"], payload["revision"], ident)
                     self.store.record(tid, "selection", result)
+                elif kind == "reopen":
+                    if tid in self._jobs and not self._jobs[tid].done():
+                        raise ValueError("先停止正在生成的图册，再改选。")
+                    result = await asyncio.to_thread(self.pool.reopen, tid, payload["session_id"], ident)
+                    block = build_view(tid, {"kind": "products", "refs": result}, self.store, self.pool)
+                    previous = next((b for b in state["blocks"] if b["kind"] == "products" and b["body"]["session_id"] == payload["session_id"]), None)
+                    if previous: block["block_id"] = previous["block_id"]
+                    self.store.record(tid, "block", block)
+                    self.store.record(tid, "progress", {"job_id": "", "state": "ready", "message": ""})
                 elif kind == "export":
                     sid = payload["session_id"]
                     self.store.ref(tid, "session", sid)
@@ -234,14 +261,26 @@ class Workspace:
                         "verification_ref": "pool:" + sid + ":" + str(payload["revision"]) + ":job:" + ident})
                     self._jobs[tid] = asyncio.create_task(self._export(tid, payload, ident, result["job_id"]))
                 elif kind == "stop":
+                    progress = state.get("progress") or {}
+                    target = {"message_id": next((b["block_id"] for b in reversed(state["blocks"]) if b["kind"] == "text" and b["body"].get("role") == "user"), None),
+                              "job_id": progress.get("job_id") if progress.get("state") == "running" else None}
+                    if "target" in payload and payload["target"] != target:
+                        raise ValueError("刚才那一步已经结束，请核对当前进度后再停止。")
                     job = self._jobs.get(tid)
                     stopped = False
                     if job and not job.done():
                         job.cancel()
                         await asyncio.gather(job, return_exceptions=True)
                         stopped = True
-                    if state["active_turn_id"]:
-                        await self.runtime.interrupt(state["thread_id"], state["active_turn_id"])
+                    turn_id = state["active_turn_id"]
+                    if not turn_id and state["state"] == "running" and state.get("thread_id"):
+                        native = await self.runtime.request("thread/read", {"threadId": state["thread_id"], "includeTurns": True}, timeout=10)
+                        turn_id = next((t["id"] for t in reversed(native["thread"].get("turns", [])) if t.get("status") not in ("completed", "interrupted", "failed")), None)
+                        if not turn_id:
+                            self.store.record(tid, "turn_ended", {"status": "interrupted"})
+                            stopped = True
+                    if turn_id:
+                        await self.runtime.interrupt(state["thread_id"], turn_id)
                         stopped = True
                     if not stopped:
                         raise ValueError("这一步已经结束了。")
@@ -249,6 +288,8 @@ class Workspace:
                 elif kind == "answer":
                     pending = next((r for r in state["pending_requests"] if r["request_id"] == payload.get("native_request_id")), None)
                     if not pending: raise Conflict("这个问题已经结束。")
+                    if pending.get("details_unavailable") and payload.get("answer", {}).get("decision") not in ("decline", "cancel"):
+                        raise ValueError("这一步的修改内容还没能显示，请先取消，让我重新准备。")
                     await self.runtime.answer(pending["request_id"], payload["answer"])
                     self.store.record(tid, "answered", {"request_id": pending["request_id"]})
                     result = {"answered": True}
@@ -276,7 +317,12 @@ class Workspace:
             message = "已经停止生成，原来的文件还在。" if isinstance(exc, asyncio.CancelledError) else str(exc)
             self.store.finish_action(tid, ident, "failed", {"error": message})
             self.store.update_job(tid, job, {"state": "failed"})
-            self.store.record(tid, "selection", {"session_id": payload["session_id"], "export_state": "failed"})
+            try:
+                selection = await asyncio.to_thread(self.pool.state, tid, payload["session_id"])
+                selection = {k: v for k, v in selection.items() if k != "items"}
+            except (ValueError, OSError):
+                selection = {"session_id": payload["session_id"], "state": "unavailable"}
+            self.store.record(tid, "selection", {**selection, "export_state": "failed"})
             self.store.record(tid, "progress", {"job_id": job, "state": "failed", "message": message})
 
     async def image(self, tid, sid, pid):
@@ -303,7 +349,7 @@ class Workspace:
             if ident not in registry: raise ValueError("Unknown capability; discover first")
             guide = (ROOT / registry[ident]["guide"]).read_text(encoding="utf-8")
             return {**registry[ident], "guide_text": guide, "workspace_call": {
-                "pool": "payload={args:[CLI参数，不含command], input_id:已上传ID(仅add), json:{records/map/plan:直接JSON对象(按需)}}。不要传磁盘路径。choose之后ui_present products refs={session_id}。",
+                "pool": "payload={args:[CLI参数，不含command], input_id:已上传ID(仅add), json:{records/map/plan:直接JSON对象(按需)}, text:仅observe的视觉转录原文}。不要传磁盘路径。choose之后ui_present products refs={session_id}。",
                 "workspace": "command=publish，payload={filename:输出目录中一个文件名}；校验后得到artifact_id，ui_present artifact。",
             }.get(ident, "当前能力用既有CLI，文件只在当前任务目录操作；网页发布使用workspace publish。")}
         if name == "capabilities_call":

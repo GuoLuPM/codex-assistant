@@ -13,7 +13,7 @@ if str(ROOT / "catalog_tool") not in sys.path:
     sys.path.insert(0, str(ROOT / "catalog_tool"))
 from pool import make_parser
 from pool_commands import execute
-from pool_owner import pool_lock
+from pool_owner import pool_lock, operation
 from pool_selection import Selections
 from pool_store import Pool
 from present import invocation
@@ -44,6 +44,14 @@ class PoolAdapter:
         directory = self.work_dir / "tasks" / tid / "tool-inputs"
         directory.mkdir(parents=True, exist_ok=True)
         trusted_paths = set()
+        if command == "observe":
+            text = payload.get("text")
+            if not isinstance(text, str) or not text.strip() or len(text.encode("utf-8")) > 1048576:
+                raise ValueError("Visual observation needs bounded plain text in payload.text")
+            target = directory / ("observation-" + hashlib.sha256(text.encode()).hexdigest() + ".local.txt")
+            target.write_text(text, encoding="utf-8")
+            trusted_paths.add(target.resolve())
+            argv += ["--text-file", str(target)]
         for name, value in json_inputs.items():
             raw = json.dumps(value, ensure_ascii=False).encode()
             if len(raw) > 1048576:
@@ -104,6 +112,25 @@ class PoolAdapter:
         if not path.is_relative_to(self.root / "assets") or not path.is_file():
             raise ValueError("商品图片不可用，请重新核对资料。")
         return path
+
+    def reopen(self, tid, session_id, request_id):
+        self.store.ref(tid, "session", session_id)
+        with pool_lock(self.root):
+            pool = Pool(self.root)
+            try:
+                choices = Selections(pool)
+                def clone():
+                    choices.verify(session_id)
+                    old = choices.state(session_id, include_items=True)
+                    fresh = choices.create([p["id"] for p in old["items"]], old["price_fields"], old["title"])
+                    if old["selected_ids"]:
+                        choices.select(fresh["session_id"], old["selected_ids"], 0)
+                    return {"session_id": fresh["session_id"]}
+                result = operation(pool.db, tid + ":" + request_id, {"reopen": session_id}, clone)
+            finally:
+                pool.close()
+        self.store.add_ref(tid, "session", result["session_id"], result)
+        return result
 
     async def export(self, tid, session_id, revision, request_id):
         self.store.ref(tid, "session", session_id)

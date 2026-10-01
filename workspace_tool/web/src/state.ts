@@ -15,14 +15,15 @@ export function applyEvent(previous:Snapshot,event:UiEvent):Snapshot {
       const block={...existing,body:{...existing.body,text:event.type==='text_delta'?existing.body.text+d.delta:d.text,complete:event.type!=='text_delta',phase:d.phase??existing.body.phase,input_ids:d.input_ids??existing.body.input_ids}};
       s.blocks=i<0?[...s.blocks,block]:s.blocks.map((b,index)=>index===i?block:b);break;
     }
-    case 'block':s.blocks=s.blocks.some(b=>b.block_id===d.block_id)?s.blocks.map(b=>b.block_id===d.block_id?d:b):[...s.blocks,d];break;
+    case 'block':if(d.kind==='artifact')s.blocks=s.blocks.filter(b=>b.kind!=='artifact'||b.block_id===d.block_id);s.blocks=s.blocks.some(b=>b.block_id===d.block_id)?s.blocks.map(b=>b.block_id===d.block_id?d:b):[...s.blocks,d];break;
     case 'selection':s.blocks=s.blocks.map(b=>b.kind==='products'&&b.body.session_id===d.session_id?{...b,body:{...b.body,...d}}:b);break;
     case 'title':s.title=d.title;break;
     case 'thread':s.thread_id=d.thread_id;break;
     case 'turn_started':s.state='running';s.active_turn_id=d.turn_id;s.error=null;break;
     case 'turn_ended':s.state=({completed:s.artifact_ids.length?'completed':'ready',interrupted:'interrupted',failed:'failed'} as Record<string,string>)[d.status]??'failed';s.active_turn_id=null;s.pending_requests=[];s.error=d.message??null;break;
     case 'error':s.state='failed';s.error=d.message;s.active_turn_id=null;break;
-    case 'question':s.pending_requests=[...s.pending_requests.filter(q=>q.request_id!==d.request_id),d];s.state='awaiting_user';break;
+    case 'notice':s.error=d.message;break;
+    case 'question':s.pending_requests=[...s.pending_requests.filter(q=>q.request_id!==d.request_id),d];s.state='awaiting_user';if(d.turn_id)s.active_turn_id=d.turn_id;break;
     case 'answered':s.pending_requests=s.pending_requests.filter(q=>q.request_id!==d.request_id);s.state=s.pending_requests.length?'awaiting_user':'running';break;
     case 'progress':s.progress=d;break;
     case 'artifact':s.artifact_ids=Array.from(new Set([...s.artifact_ids,d.artifact_id]));if(!s.active_turn_id)s.state='completed';break;

@@ -42,7 +42,7 @@ export function ProductPicker({taskId,value,onAction}:{taskId:string;value:Selec
     <div className="product-grid">{value.items.map(product=><ProductCard key={product.id} product={product} checked={selected.includes(product.id)} expanded={expanded.has(product.id)} disabled={value.state!=='open'||exporting} toggle={toggle} expand={expand}/>)}</div>
     {error&&<div className="inline-error" role="alert"><p>{error}</p><button onClick={()=>void flush().catch(()=>{})}>重试保存</button></div>}
     {compare&&<Comparison items={value.items.filter(p=>selected.includes(p.id))}/>}
-    <div className="picker-actions">{selected.length>=2&&selected.length<=4&&<button className="quiet-button" onClick={()=>setCompare(!compare)}>{compare?'收起对比':'对比一下'}</button>}{value.export_state!=='completed'&&<button className="primary-button" disabled={!selected.length||exporting||!!error} onClick={()=>void exportPpt()}>{exporting?'正在做成图册…':'做成图册'}</button>}</div>
+    <div className="picker-actions">{value.state==='sealed'&&!exporting&&<button className="quiet-button" onClick={()=>void onAction('reopen',{session_id:value.session_id}).catch(e=>setError(e.message))}>重新挑选</button>}{selected.length>=2&&selected.length<=4&&<button className="quiet-button" onClick={()=>setCompare(!compare)}>{compare?'收起对比':'对比一下'}</button>}{value.export_state!=='completed'&&<button className="primary-button" disabled={!selected.length||exporting||!!error||value.state==='unavailable'} onClick={()=>void exportPpt()}>{exporting?'正在做成图册…':'做成图册'}</button>}</div>
     {share&&<ShareDialog taskId={taskId} sessionId={value.session_id} onAction={onAction} onClose={()=>setShare(false)}/>}
     <span className="sr-only" role="status">{saving?'正在保存选择':''}</span>
   </section>

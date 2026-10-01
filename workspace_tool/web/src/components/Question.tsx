@@ -9,8 +9,9 @@ export function Question({value,onAction}:{value:any;onAction:Action}){
     {nativeQuestion?<form onSubmit={e=>{e.preventDefault();void reply({answers:Object.fromEntries(value.questions.map((q:any)=>[q.id,{answers:[answers[q.id]??'']}]))})}}>
       {value.questions.map((q:any)=><fieldset key={q.id}><legend>{q.question}</legend>{q.options?.map((o:any)=><label className="option" key={o.label}><input type="radio" name={q.id} checked={answers[q.id]===o.label} onChange={()=>setAnswers({...answers,[q.id]:o.label})}/><span>{o.label}</span></label>)}<input aria-label={q.question} placeholder="也可以直接说…" value={answers[q.id]??''} onChange={e=>setAnswers({...answers,[q.id]:e.target.value})}/></fieldset>)}
       <button className="primary-button" disabled={busy||value.questions.some((q:any)=>!answers[q.id]?.trim())}>确定</button>
-    </form>:<><p>{value.question}</p>{(value.command||value.permissions)&&<details><summary>查看这一步</summary><pre>{value.command||JSON.stringify(value.permissions,null,2)}</pre></details>}
-      <div className="dialog-actions"><button className="primary-button" disabled={busy} onClick={()=>void reply(value.method==='item/permissions/requestApproval'?{permissions:value.permissions??{},scope:'turn'}:{decision:'accept'})}>同意这一次</button><button disabled={busy} onClick={()=>void reply(value.method==='item/permissions/requestApproval'?{permissions:{},scope:'turn'}:{decision:declineDecision})}>先不要</button></div></>}
+    </form>:<><p>{value.question}</p>{(value.command||value.permissions||value.changes?.length)&&<details><summary>查看这一步</summary><pre>{value.command||JSON.stringify(value.permissions||value.changes,null,2)}</pre>{value.grant_root&&<p>{value.grant_root}</p>}</details>}
+      {value.details_unavailable&&<p>修改内容还没能显示，请先取消，让我重新准备。</p>}
+      <div className="dialog-actions"><button className="primary-button" disabled={busy||value.details_unavailable} onClick={()=>void reply(value.method==='item/permissions/requestApproval'?{permissions:value.permissions??{},scope:'turn'}:{decision:'accept'})}>同意这一次</button><button disabled={busy} onClick={()=>void reply(value.method==='item/permissions/requestApproval'?{permissions:{},scope:'turn'}:{decision:declineDecision})}>先不要</button></div></>}
     {error&&<p className="error-text" role="alert">{error}</p>}
   </section>
 }

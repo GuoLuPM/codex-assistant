@@ -148,7 +148,9 @@ class TaskStore:
         elif kind == "title":
             state["title"] = data["title"][:60]
         elif kind == "turn_started":
-            state.update(state="running", active_turn_id=data.get("turn_id"), error=None)
+            state.update(state="running", active_turn_id=data.get("turn_id"), last_turn_id=data.get("turn_id"), error=None)
+        elif kind == "notice":
+            state["error"] = data["message"]
         elif kind == "turn_ended":
             status = data["status"]
             state.update(state={"completed": "completed" if state["artifact_ids"] else "ready", "interrupted": "interrupted", "failed": "failed"}.get(status, "failed"),
@@ -158,6 +160,8 @@ class TaskStore:
         elif kind == "question":
             state["pending_requests"] = [r for r in state["pending_requests"] if r["request_id"] != data["request_id"]] + [data]
             state["state"] = "awaiting_user"
+            if data.get("turn_id"):
+                state["active_turn_id"] = state["last_turn_id"] = data["turn_id"]
         elif kind == "answered":
             state["pending_requests"] = [r for r in state["pending_requests"] if r["request_id"] != data["request_id"]]
             state["state"] = "awaiting_user" if state["pending_requests"] else "running"
@@ -173,6 +177,8 @@ class TaskStore:
             if data.get("input_ids"):
                 block["body"]["input_ids"] = data["input_ids"]
         elif kind == "block":
+            if data["kind"] == "artifact":
+                state["blocks"] = [b for b in state["blocks"] if b["kind"] != "artifact" or b["block_id"] == data["block_id"]]
             index = next((i for i, b in enumerate(state["blocks"]) if b["block_id"] == data["block_id"]), None)
             if index is None:
                 state["blocks"].append(data)
@@ -221,6 +227,14 @@ class TaskStore:
     def recover(self):
         with self.db() as db:
             states = [json.loads(r[0]) for r in db.execute("SELECT snapshot FROM tasks")]
+            uncertain = list(db.execute("SELECT task,id FROM actions WHERE json_extract(receipt,'$.state') IN ('accepted','pending')"))
+            # The business owner is re-read by Workspace.start. Do not leave a
+            # retry waiting forever or replay an effect whose response was lost.
+            # A matching verified export receipt can subsequently replace this.
+            for row in uncertain:
+                receipt = {"request_id": row['id'], "state": "failed", "result": {
+                    "error": "上次连接在这一步中断了，请核对页面上的资料和选择后再操作。"}}
+                db.execute("UPDATE actions SET receipt=? WHERE task=? AND id=?", (encoded(receipt), row['task'], row['id']))
         for state in states:
             if state["state"] in ("running", "awaiting_user"):
                 self.record(state["task_id"], "turn_ended", {"status": "interrupted", "message": "上次连接已中断，您可以接着说。已保存的资料和选择还在。"})

@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from workspace_tool.service import Workspace
+from workspace_tool.runtime import RuntimeError
 
 
 class FakeRuntime:
@@ -106,3 +107,23 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         await self.service.start()
         self.assertTrue(self.service.status()['ready'])
         self.assertEqual(self.service.store.ref(self.tid, 'job', 'old')['state'], 'failed')
+
+    async def test_start_timeout_keeps_confirmed_turn_stoppable(self):
+        async def timeout(request):
+            await self.service.handle_runtime_event({'kind': 'turn/started', 'thread_id': 'native-thread', 'turn_id': 'late-turn', 'payload': {}})
+            raise RuntimeError('timeout', code='request_timeout')
+        self.runtime.start_turn = timeout
+        response = await self.service.message(self.tid, {'request_id': 'late', 'expected_revision': 0, 'text': '整理资料'})
+        state = self.service.store.snapshot(self.tid)
+        self.assertEqual(state['active_turn_id'], 'late-turn')
+        self.assertEqual(state['state'], 'running')
+        self.assertEqual(response['state'], 'completed')
+        await self.service.action(self.tid, {'request_id': 'stop-late', 'expected_revision': state['revision'], 'kind': 'stop', 'payload': {}})
+
+    async def test_file_approval_keeps_reviewable_changes_after_refresh(self):
+        self.service._threads['native-thread'] = self.tid
+        item = {'id': 'file1', 'type': 'fileChange', 'changes': [{'path': 'notice.txt', 'kind': {'type': 'add'}, 'diff': '+周五开会'}]}
+        await self.service.handle_runtime_event({'kind': 'item/started', 'thread_id': 'native-thread', 'turn_id': 't1', 'payload': {'item': item}})
+        await self.service.handle_runtime_event({'kind': 'item/fileChange/requestApproval', 'thread_id': 'native-thread', 'turn_id': 't1', 'item_id': 'file1', 'request_id': 8, 'payload': {}})
+        question = self.service.store.snapshot(self.tid)['pending_requests'][0]
+        self.assertEqual(question['changes'], item['changes'])

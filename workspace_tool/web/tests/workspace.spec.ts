@@ -24,6 +24,17 @@ test('real page preserves selection, input, layout and local-only actions',async
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.getByRole('button',{name:'确认分享'})).toBeVisible();
   await page.getByRole('button',{name:'关闭'}).click();
+  await page.getByRole('button',{name:'做成图册',exact:true}).click();
+  await expect(page.getByRole('button',{name:'停止',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'停止',exact:true}).click();
+  await expect(page.getByRole('button',{name:'重新挑选'})).toBeVisible();
+  await expect(page.getByRole('checkbox').first()).toBeDisabled();
+  await page.reload();
+  await page.getByRole('button',{name:'重新挑选'}).click();
+  await expect(page.getByRole('checkbox').first()).toBeEnabled();
+  await expect(page.getByRole('checkbox').first()).toBeChecked();
+  await page.getByRole('checkbox').nth(1).check();
+  await expect(page.getByText('已选 2 款',{exact:true})).toBeVisible();
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.evaluate(()=>document.documentElement.style.fontSize='44px');
