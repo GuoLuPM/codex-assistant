@@ -105,6 +105,7 @@ def build(tag, output, cache, proxy=None):
                     csv.writer(stream, lineterminator='\n').writerows(row for row in rows if (packages / row[0]).is_file())
         shutil.copyfile(application / 'packaging/Setup.ps1', root / 'Setup.ps1')
         shutil.copyfile(application / 'docs/WINDOWS_RELEASE.md', root / 'START-HERE.md')
+        shutil.copyfile(application / 'docs/USER_GUIDE.html', root / '使用手册.html')
         manifest = {'version': 1, 'platform': 'windows-x64', 'tag': tag, 'commit': commit,
                     'python_version': lock['python']['version'], 'files': {}}
         for path in sorted(root.rglob('*')):

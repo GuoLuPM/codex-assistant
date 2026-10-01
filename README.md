@@ -2,6 +2,8 @@
 
 供 Codex 调用的本地工具库。用户描述需求，Codex 找到能力、读取必要说明并调用脚本。脚本处理确定性工作，完整业务数据留在本机。
 
+**第一次用：**让 Codex 打开 [大字版使用手册](docs/USER_GUIDE.html)，或直接说“我不会用，带我一步一步来”。手册下载后可直接打开，内容是“给资料 → 说需要 → 勾选后做图册”；Codex 的接待规则见 [接待与帮助](docs/USER_SERVICE.md)。
+
 新 Windows 可直接下载 [Releases 安装包](https://github.com/GuoLuPM/codex-assistant/releases/latest)，包含独立 Python 和基础依赖；[对接文档与转发提示词](docs/WINDOWS_RELEASE.md) 说明如何接通本机 Codex 的 PPT 组件。
 
 ## 选一个使用档位
@@ -33,6 +35,7 @@
 | 任务 | 入口 |
 | --- | --- |
 | Codex 工作规则与路由 | [AGENTS.md](AGENTS.md) |
+| 初次使用、看不懂、需要帮助 | [接待与帮助](docs/USER_SERVICE.md)；给用户看 [使用手册](docs/USER_GUIDE.html) |
 | 查找工具 | `assistant.ps1 list --query 关键词`；`describe 工具ID` |
 | 新设备、运行时、目录迁移 | [WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md) |
 | 了解路线评估或接入新能力 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) |
