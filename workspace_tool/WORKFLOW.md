@@ -34,7 +34,7 @@
 
 ## 开发与验收（按需）
 
-Python 依赖见 `requirements.txt`。前端用 Node 24、pnpm 11.19.0；`pnpm install --frozen-lockfile` 后运行 `test`、`build`、`test:e2e`。浏览器测试只用合成资料和模拟模型；Windows 默认本机 Edge，CI 安装 Playwright Chromium。后台测试：`python -m unittest discover -s workspace_tool/tests -v`。
+Python 依赖见 `requirements.txt`。前端用 Node 24、pnpm 11.19.0；`pnpm install --frozen-lockfile` 后运行 `test`、`build`、`test:e2e`。在本机 Windows 用 Edge 检查页面；浏览器测试只用合成资料和模拟模型，不启动 GitHub 虚拟环境。后台测试：`python -m unittest discover -s workspace_tool/tests -v`。
 
 真实 Codex 检查另用 `scripts/check_workspace_runtime.py` 和 `scripts/evaluate_workspace.py`，会消耗当前账号额度；结果只写私有 data。生成核验用 `scripts/check_windows_deployment.py --workspace --require-pdf --ppt`。正式数据不用于公开测试；不能把模拟模型或连接成功当成全部能力已通过。用原生 usage 计数，未知保持未知；缓存输入不能等同免费，不承诺固定节省比例。
 

@@ -8,4 +8,4 @@
 - 模型两档：正常（默认）用最新 Sol 主负责、最新 Terra 有界协助；低消耗整体降一档，用最新 Terra 主负责、最新 Luna 有界协助。各系列以当前 Codex 可用最新版为准，两档均普通速度，不用 Astra/快速模式。默认主代理完成；用户选档或确需独立分工时必须读 [档位与代理分工](docs/AGENT_WORKFLOW.md)。
 - 新增工具、修改共享入口或跨模块合同，必须读 [架构与扩展](docs/ARCHITECTURE.md)；契约变化同步消费者、测试和文档。只改某项工具时按其 guide 路由。
 - 新 Windows / 环境缺失 / 项目搬迁时读 [部署与迁移](docs/WINDOWS_SETUP.md)。上述按需文档是本文件的延伸约束；未命中时不加载。
-- 检查：`python -m unittest discover -s tests -v` 加修改能力的测试；公开同步前 `python scripts/audit_public.py`。只提交代码、合成测试和通用文档。
+- 开发和验收以本机 Windows 10/11 为目标，不启用 GitHub 虚拟环境或 Linux CI。检查：`python -m unittest discover -s tests -v` 加修改能力的本地测试；公开同步前 `python scripts/audit_public.py`。未实测的系统版本如实标注。只提交代码、合成测试和通用文档。

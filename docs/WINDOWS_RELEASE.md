@@ -2,6 +2,8 @@
 
 目标：Windows 10/11 x64，用户已有 Codex；无需预装 Python、Git 或登录 GitHub。默认代码 `D:\code\assistant`，独立 Python 环境 `D:\tools\codex-assistant`。用户只描述需要、提供文件、勾选产品。
 
+验收在本机运行，不依赖 GitHub 虚拟环境。0.4 已在 Windows 11 实机验证安装、网页与实际 PPT；Windows 10 尚未实机验证，新设备仍须执行本文的验收脚本，不能只凭版本名称承诺通过。
+
 **给用户看：**安装包顶层的 `使用手册.html` 是可直接双击打开的大字版说明。安装后，同一手册位于工程的 `docs/USER_GUIDE.html`。本文是给 Codex 执行的部署步骤；对用户按需打开使用手册，一次带他做一步。
 
 ## 先选使用档位
