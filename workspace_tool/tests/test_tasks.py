@@ -49,6 +49,16 @@ class TaskTests(unittest.TestCase):
         self.assertEqual(self.store.snapshot(tid)["state"], "interrupted")
         self.assertIsNone(self.store.snapshot(tid)["active_turn_id"])
 
+    def test_publishing_file_does_not_end_a_still_running_native_turn(self):
+        tid = self.task['task_id']
+        self.store.record(tid, 'turn_started', {'turn_id': 't1'})
+        self.store.record(tid, 'artifact', {'artifact_id': 'a1', 'verification_ref': 'verified'})
+        self.assertEqual(self.store.snapshot(tid)['state'], 'running')
+        self.assertEqual(self.store.active_count(), 1)
+        self.store.record(tid, 'turn_ended', {'status': 'completed'})
+        self.assertEqual(self.store.snapshot(tid)['state'], 'completed')
+        self.assertEqual(self.store.active_count(), 0)
+
     def test_stream_updates_same_block_and_final_text_deduplicates(self):
         tid = self.task["task_id"]
         self.store.record(tid, "text_delta", {"block_id": "m1", "delta": "您"})
@@ -64,3 +74,14 @@ class TaskTests(unittest.TestCase):
         self.assertEqual(self.store.ref(tid, "input", "file1")["display_name"], "报价.xlsx")
         with self.assertRaises(ValueError):
             self.store.ref(self.store.create()["task_id"], "input", "file1")
+
+    def test_refresh_keeps_selection_and_export_state(self):
+        tid = self.task["task_id"]
+        self.store.record(tid, "block", {"block_id": "products:s1", "kind": "products", "body": {
+            "session_id": "s1", "selected_ids": [], "revision": 1, "items": [{"id": "p1"}]}})
+        self.store.record(tid, "selection", {"session_id": "s1", "selected_ids": ["p1"], "revision": 2, "export_state": "running"})
+        self.store.record(tid, "progress", {"job_id": "j1", "state": "running", "message": "正在做成图册…"})
+        snapshot = TaskStore(self.path).snapshot(tid)
+        self.assertEqual(snapshot["blocks"][0]["body"]["selected_ids"], ["p1"])
+        self.assertEqual(snapshot["progress"]["state"], "running")
+        self.assertEqual(snapshot["blocks"][0]["body"]["items"], [{"id": "p1"}])

@@ -26,7 +26,7 @@ $env:ASSISTANT_PYTHON = 'D:\tools\assistant-venv\Scripts\python.exe'
 ./assistant.ps1 list
 ```
 
-如需新建虚拟环境，用已核验的 Python 执行 `-m venv D:\tools\assistant-venv`，pip 缓存可通过 `PIP_CACHE_DIR` 指向 D 盘。`doctor` 返回实际 Python 和项目路径，只表示入口可用。pool/catalog 检索需 SQLite FTS5 与 requirements 中的 Python 依赖；多格式读取使用 PyMuPDF、python-pptx、python-docx、xlrd。选择页使用 Python 标准库 HTTP 服务，无须安装 Web 框架或单独数据库。运行测试验证实际依赖。
+如需新建虚拟环境，用已核验的 Python 执行 `-m venv D:\tools\assistant-venv`，pip 缓存可通过 `PIP_CACHE_DIR` 指向 D 盘。`doctor` 返回实际 Python 和项目路径，只表示入口可用。pool/catalog 检索需 SQLite FTS5 与 requirements 中的 Python 依赖；多格式读取使用 PyMuPDF、python-pptx、python-docx、xlrd。旧选择页使用标准库 HTTP 服务；新工作台需要 `workspace_tool/requirements.txt` 和已构建的网页，Release 已包含。无需单独数据库。运行测试验证实际依赖。
 
 ## PPT 环境
 
@@ -71,3 +71,11 @@ PPT 使用 Codex 桌面版提供的 Node/Python、`@oai/artifact-tool` 与 Prese
 ```
 
 再查一条真实记录、核对价格标签与来源；pool 用 `choose/open` 打开选择页，确认勾选持久化后 `ppt --session ...` 导出；catalog 用明确 ID 通过 `ppt --ids ... --price-fields ...` 生成。PPT 环境齐全且视觉抽查后才能说 PPT 已部署成功。已有客户成品时，冒烟产物放私有临时目录并收尾，不替换客户成品。用户日常只收到一个最终文件。
+
+## 工作台升级与迁移
+
+升级先停止本工作台和旧选品服务，再核对本机配置和代码变更。安装器拒绝覆盖不同版本；可把新版装到新空目录，保留旧版以便回退。相同设备、相同工程路径更新代码时，`data/workspace` 的任务、事件和选择继续保留；不删除数据库重新建库。
+
+更换设备或工程绝对路径时，优先迁移完整产品池、用户原始资料和最终成品。工作台任务含原生 Codex 会话标识和本机文件引用，目前没有跨机器迁移命令，不能直接复制后声称所有聊天可续接。新机从工作台新建任务，并按真实产品池继续找产品；不要复制另一台机器的账号凭据。
+
+从源代码开发网页需 `pnpm --dir workspace_tool/web install --frozen-lockfile` 和 `pnpm --dir workspace_tool/web run build`。新用户直接用 Release，无需这一步。维护者构建发行包使用 `scripts/build_windows_bundle.py --tag v版本 --output 私有输出目录 --cache 私有缓存目录 --node 构建机Node --pnpm-js 构建机pnpm.mjs`；前端从干净提交重建，依赖不会作为 node_modules 交给用户。

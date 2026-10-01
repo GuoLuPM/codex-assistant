@@ -2,6 +2,8 @@
 
 命令前缀 `./assistant.ps1 run pool`（下文省略）。默认库 `data/product-pool/`；测试时在子命令前加 `--index-dir 私有测试目录`，全程用同一目录。自然语言理解只在 Codex，不调用额外模型服务。
 
+在网页工作台中按同一业务合同办事，使用其 MCP 注册的引用和 `ui_present` 展示商品。用户直接点“做成图册”；以下 `open` 和“回聊天说选好了”的步骤只适用于旧独立选择页。工作台接法见 [workspace](../workspace_tool/WORKFLOW.md)。
+
 ## 用户交付文件
 
 1. `add 路径` 按文件内容哈希保存原件。`duplicate` 表示已存在，不重新抽取；同名但内容不同会累积加入。`files` 分页查看 `ready/partial/pending`，不要把 pending 当作产品已入库。

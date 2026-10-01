@@ -72,7 +72,9 @@ def configure(project, python=None, runtime_root=None, skill_dir=None):
     temporary = project / 'environment.local.json.tmp'
     temporary.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding='utf-8')
     temporary.replace(config_path)
-    return {'project': str(project), 'python': str(python), 'base_ready': True, 'ppt_ready': not missing, 'ppt_missing': missing,
+    web_probe = subprocess.run([str(python), '-B', '-c', 'import fastapi,uvicorn'], capture_output=True, timeout=30)
+    workspace_installed = web_probe.returncode == 0 and (project / 'workspace_tool/web/dist/index.html').is_file()
+    return {'project': str(project), 'python': str(python), 'base_ready': True, 'workspace_installed': workspace_installed, 'ppt_ready': not missing, 'ppt_missing': missing,
             'ppt_verified': False,
             'next': 'Run scripts/check_windows_deployment.py --ppt' if not missing else 'Use Codex load_workspace_dependencies and discover Presentations skill, then rerun configure_windows.py with their paths'}
 

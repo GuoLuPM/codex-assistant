@@ -4,6 +4,17 @@
 
 ## 决策
 
+### 本机工作台（0.4）
+
+`workspace` 是用户交互层：React 固定组件 + FastAPI 本机 HTTP/SSE，独立 Codex App Server stdio 负责理解与工具使用。它复用原产品池与 `run.ps1` 的 PPT 核验管线。运行合同和开发检查见 [workspace guide](../workspace_tool/WORKFLOW.md)。
+
+- 原生 thread/turn/request 标识映射到本地任务；工作台 SQLite 保存事件、引用、回执和原始消耗计数。商品事实仍只在产品池。
+- CLI、旧选择页、新工作台共用 OS 写锁与业务事务回执，崩溃释放锁；不会用两个数据库假装一个原子事务。恢复先读已提交选择和匹配的成品验证回执，未知效果不自动重放。
+- 只有发消息启动模型；勾选、展开、对比、导出、下载由固定动作完成。MCP 只暴露发现、说明、调用和展示四个入口；展示按任务引用取事实，不执行模型提供的 HTML/脚本。
+- HTTP 仅绑定 127.0.0.1，校验 Host/Origin、一次性启动凭据和 HttpOnly 会话。账号由原生 Codex 管理。公开分享仍是隔离的只读服务，不开放工作台 API。
+- 原生批准保留到网页由用户答复；未知原生请求显式拒绝并请求中断。Windows 子进程归属 Job Object，收尾只关闭本服务拥有的进程树。
+- 使用已安装 Codex 的真实运行时，优先宿主 `CODEX_CLI_PATH`；不借用桌面私有 pipe，不读取凭据。桌面专属工具不等于网页可用能力；不能承诺完整复制桌面所有功能。
+
 保留 **Codex 做语义判断 + 本地脚本执行确定性工作**。项目命名 `assistant`，GitHub 仓库命名 `codex-assistant`。`catalog` 用于既有 XLSX 图册；`pool` 负责持续、多格式、语义标签与交互选品，共用同一检索和 PPT 引擎。产品能力源码集中在 `catalog_tool/`。
 
 | 方案 | 适用与取舍 |

@@ -151,7 +151,7 @@ class TaskStore:
             state.update(state="running", active_turn_id=data.get("turn_id"), error=None)
         elif kind == "turn_ended":
             status = data["status"]
-            state.update(state={"completed": "ready", "interrupted": "interrupted", "failed": "failed"}.get(status, "failed"),
+            state.update(state={"completed": "completed" if state["artifact_ids"] else "ready", "interrupted": "interrupted", "failed": "failed"}.get(status, "failed"),
                          active_turn_id=None, pending_requests=[], error=data.get("message"))
         elif kind == "error":
             state.update(state="failed", active_turn_id=None, error=data["message"])
@@ -168,6 +168,8 @@ class TaskStore:
                 state["blocks"].append(block)
             block["body"]["text"] = block["body"]["text"] + data["delta"] if kind == "text_delta" else data["text"]
             block["body"]["complete"] = kind != "text_delta"
+            if data.get("phase"):
+                block["body"]["phase"] = data["phase"]
             if data.get("input_ids"):
                 block["body"]["input_ids"] = data["input_ids"]
         elif kind == "block":
@@ -181,8 +183,15 @@ class TaskStore:
                 raise ValueError("Artifact requires verification receipt")
             if data["artifact_id"] not in state["artifact_ids"]:
                 state["artifact_ids"].append(data["artifact_id"])
-            state["state"] = "completed"
-        elif kind not in ("progress", "usage", "selection", "input"):
+            if not state["active_turn_id"]:
+                state["state"] = "completed"
+        elif kind == "selection":
+            for block in state["blocks"]:
+                if block["kind"] == "products" and block["body"].get("session_id") == data["session_id"]:
+                    block["body"].update(data)
+        elif kind == "progress":
+            state["progress"] = data
+        elif kind not in ("usage", "input"):
             raise ValueError("Unknown task event")
 
     def events_after(self, tid, seq, limit=200):
@@ -215,3 +224,36 @@ class TaskStore:
         for state in states:
             if state["state"] in ("running", "awaiting_user"):
                 self.record(state["task_id"], "turn_ended", {"status": "interrupted", "message": "上次连接已中断，您可以接着说。已保存的资料和选择还在。"})
+        return [s["task_id"] for s in states]
+
+    def update_job(self, tid, ident, changes):
+        with self.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT payload FROM refs WHERE task=? AND kind='job' AND id=?", (tid, ident)).fetchone()
+            if not row: raise ValueError("Unknown job")
+            value = json.loads(row[0])
+            value.update(changes)
+            db.execute("UPDATE refs SET payload=? WHERE task=? AND kind='job' AND id=?", (encoded(value), tid, ident))
+
+    def usage(self, thread_id):
+        with self.db() as db:
+            row = db.execute("SELECT payload FROM usage WHERE thread=?", (thread_id,)).fetchone()
+            return json.loads(row[0]) if row else None
+
+    def active_count(self):
+        with self.db() as db:
+            return db.execute("SELECT count(*) FROM tasks WHERE json_extract(snapshot,'$.active_turn_id') IS NOT NULL OR json_extract(snapshot,'$.state') IN ('running','awaiting_user')").fetchone()[0]
+
+    def record_usage(self, thread_id, turn_id, usage_event):
+        if not usage_event or not isinstance(usage_event.get("total"), dict):
+            return
+        total = usage_event["total"]
+        if any(type(total.get(k)) is not int or total[k] < 0 for k in ("inputTokens", "outputTokens", "totalTokens")):
+            raise ValueError("Invalid native usage counters")
+        with self.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            old = db.execute("SELECT payload FROM usage WHERE thread=?", (thread_id,)).fetchone()
+            if old and json.loads(old[0])["totalTokens"] >= total["totalTokens"]:
+                return
+            # Native output already includes reasoning. Do not add it twice.
+            db.execute("INSERT INTO usage VALUES (?,?) ON CONFLICT(thread) DO UPDATE SET payload=excluded.payload", (thread_id, encoded(total)))

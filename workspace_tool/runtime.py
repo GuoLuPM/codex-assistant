@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from workspace_tool.processes import OwnedProcessGroup
 
 
 class RuntimeError(Exception):
@@ -56,6 +57,7 @@ def choose_model(models: list[dict], profile: str) -> str:
 class CodexRuntime:
     def __init__(self):
         self.process = None
+        self._group = None
         self._ready = False
         self._closed = False
         self._next_id = 0
@@ -72,8 +74,7 @@ class CodexRuntime:
             raise RuntimeError("Codex connection already started")
         self.config = config or {}
         command = self.config.get("command") or [find_codex(self.config.get("codex_bin")), "app-server", "--listen", "stdio://"]
-        # Tier is a per-thread/turn API field. In CLI config, "default" is not
-        # a valid TOML enum (only fast/flex); do not write it as an override.
+        # Use per-thread/turn tier fields; never modify the user's global config.
         if "command" not in self.config:
             for key, value in self.config.get("overrides", {}).items():
                 command += ["-c", f"{key}={value}"]
@@ -87,6 +88,11 @@ class CodexRuntime:
             limit=8 * 1024 * 1024,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
+        try:
+            self._group = OwnedProcessGroup(self.process.pid)
+        except OSError:
+            self.process.terminate(); await self.process.wait()
+            raise
         self._reader = asyncio.create_task(self._read_loop())
         self._stderr = asyncio.create_task(self._drain_stderr())
         try:
@@ -246,8 +252,11 @@ class CodexRuntime:
             try:
                 await asyncio.wait_for(self.process.wait(), 3)
             except asyncio.TimeoutError:
-                self.process.terminate()
+                if self._group: self._group.close()
+                if self.process.returncode is None: self.process.terminate()
                 await self.process.wait()
+            finally:
+                if self._group: self._group.close()
         for task in (self._reader, self._stderr):
             if task:
                 if not task.done():

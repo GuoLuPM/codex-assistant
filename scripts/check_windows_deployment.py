@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'catalog_tool'))
 
 
-def check(ppt=False, require_pdf=False):
-    modules = ['openpyxl', 'PIL', 'pptx', 'docx', 'xlrd'] + (['pymupdf'] if require_pdf else [])
+def check(ppt=False, require_pdf=False, workspace=False):
+    modules = ['openpyxl', 'PIL', 'pptx', 'docx', 'xlrd'] + (['pymupdf'] if require_pdf else []) + (['fastapi', 'uvicorn'] if workspace else [])
     for name in modules: importlib.import_module(name)
     with sqlite3.connect(':memory:') as database: database.execute('CREATE VIRTUAL TABLE probe USING fts5(text)')
     from openpyxl import Workbook
@@ -65,6 +65,28 @@ def check(ppt=False, require_pdf=False):
             if len(deck.slides) != 1 or '部署测试保温杯' not in text or '零售价  88' not in text: raise ValueError('Exported PPT facts differ')
             result.update(ppt_verified=True, slides=len(deck.slides))
         result.update(pool_import=True, duplicate_skip=True, budget_search=True, selection=True)
+        if workspace:
+            sys.path.insert(0, str(ROOT))
+            from workspace_tool.cli import launch, control
+            import time
+            if not (ROOT / 'workspace_tool/web/dist/index.html').is_file(): raise ValueError('Built workspace page is missing; use the Windows release asset')
+            directory = work / 'workspace'
+            launch(directory, work / 'pool')
+            state = json.loads((directory / 'server.local.json').read_text(encoding='utf-8'))
+            try:
+                deadline = time.monotonic() + 45
+                while time.monotonic() < deadline:
+                    ready = control(state, 'status')
+                    if ready['ready'] or ready.get('error'): break
+                    time.sleep(.5)
+                if not ready['ready']: raise ValueError('Codex connection not ready: ' + str(ready.get('error') or 'Check Codex login and installed models'))
+                result.update(workspace_ready=True, codex_version=ready['version'], models=ready['models'])
+            finally:
+                control(state, 'stop', method='POST')
+                for _ in range(100):
+                    if not (directory / 'server.local.json').exists(): break
+                    time.sleep(.1)
+                else: raise ValueError('Owned workspace has not finished shutting down')
         # Only disposable synthetic state in this exact task directory is removed.
         if not work.resolve().is_relative_to(private.resolve()) or any(p.is_symlink() or (hasattr(p, 'is_junction') and p.is_junction()) for p in work.rglob('*')):
             raise ValueError('Unsafe test cleanup path')
@@ -79,5 +101,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--ppt', action='store_true')
     parser.add_argument('--require-pdf', action='store_true')
+    parser.add_argument('--workspace', action='store_true')
     args = parser.parse_args()
-    print(json.dumps(check(args.ppt, args.require_pdf), ensure_ascii=False))
+    print(json.dumps(check(args.ppt, args.require_pdf, args.workspace), ensure_ascii=False))

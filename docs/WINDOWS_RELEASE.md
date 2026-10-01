@@ -15,7 +15,7 @@
 
 ## 包里有什么
 
-- 当前公开工程、官方 Python 3.13.15 x64、已固定版本的 Excel/Word/PPT 读取与图像依赖、pip、许可证及逐文件 SHA-256 清单。
+- 当前公开工程、官方 Python 3.13.15 x64、已固定版本的 Excel/Word/PPT 读取、图像和网页服务依赖、已构建的网页、pip、许可证及逐文件 SHA-256 清单。
 - 临时分享组件 cloudflared 及 Apache-2.0 许可证也已包含；选品页可生成只读外网链接，使用时需要联网，无需额外账号或域名。
 - PDF 的 PyMuPDF 固定版本由安装器从官方 PyPI 文件地址下载到用户电脑，可使用 HTTP 代理。`-SkipPdf` 可明确跳过，结果会标记 PDF 未安装。
 - PPT 导出继续对接这台电脑由 Codex 提供的 Node、artifact-tool 和 Presentations skill。这些专用组件没有重新分发进公开包；首次使用可能需要 Codex 下载自己的运行时。不能说这是完全离线的全功能包。
@@ -66,33 +66,35 @@ $assistantPython = 'D:\tools\codex-assistant\python\python.exe'
 Set-Location D:\code\assistant
 .\assistant.ps1 doctor
 .\assistant.ps1 list --query '产品池'
-& D:\tools\codex-assistant\python\python.exe scripts\check_windows_deployment.py --require-pdf --ppt
+& D:\tools\codex-assistant\python\python.exe scripts\check_windows_deployment.py --workspace --require-pdf --ppt
 ```
 
 该检查只生成合成商品，验证原价、改名重复入库、预算检索、选择持久化和实际 PPT 管线。合成文件放独立私有目录，成功后清理；失败保留现场并返回路径。不会覆盖用户已有 PPT。`ppt_verified=true` 才能报告实际导出成功。若用户要看效果，另用其真实文件生成选择页，等用户自己勾选。
 
 ## 4. 日常使用与私有数据
 
-- 在 Codex 打开 `D:\code\assistant`，先读 `AGENTS.md`，再由入口路由到一个指南。常用入口 `assistant.ps1 run pool`。
+- 在 Codex 打开 `D:\code\assistant`，先读 `AGENTS.md`，再由入口路由到一个指南。常用入口 `assistant.ps1 run workspace open`；用 Codex 打开工具显示返回 URL。启动链接只用一次，不转发给别人。
 - 首次接待或用户不会操作时，读 `docs/USER_SERVICE.md`；需要帮助就打开 `docs/USER_GUIDE.html`。用户明确索要手册时直接给，用户拒绝阅读就继续口头引导，不反复问是否需要帮助。
-- 用户可以说：“这几份报价加进去”“一百以内，适合过年送长辈，别要数码”“给我挑几款，我勾好了再做 PPT”。Codex 拆条件、查依据、显示 HTML；用户只勾选，最终交付一份 PPT。
+- 用户可以说：“这几份报价加进去”“一百以内，适合过年送长辈，别要数码”“给我挑几款，我勾好了再做 PPT”。工作台里直接聊天、添加文件、勾选并点“做成图册”，核验完成后下载一个 PPT。
 - 来源、产品池及本地配置留在当前电脑。数据迁移必须私下传完整 `data/product-pool/`；不是下载公开 Release 就有原来的产品。迁移时先停写入和选择服务，步骤见 `docs/WINDOWS_SETUP.md`。
-- 新电脑要重新 `open --session ID` 获取本机地址；旧电脑的 `127.0.0.1` 链接不能通用。VPN 7890 只帮助联网，不是远程数据库或远程桌面地址。
+- 新电脑要重新 `run workspace open` 获取本机地址；旧电脑的 `127.0.0.1` 链接不能通用。VPN 7890 只帮助联网，不是远程数据库或远程桌面地址。
 - 给别人看商品时点击页头分享图标，先设时间、再点“确认分享”。默认“永久”（持续到停止或服务退出），也可输入整数小时并加减调整；电脑保持开机联网，可随时停止。分享本页全部候选及展示价，访客只能看。仅 HTTP 代理并不保证隧道连接，须实测收件人的网络。
 - 按用户选择的正常 / 低消耗档分工，辅助模型只做范围明确的工作，主模型负责复核和正式写入。无需额外 API key 或独立 agent 服务。
+
+## 打开工作台
+
+确认 Codex 已安装并登录。运行 `./assistant.ps1 run workspace open`，使用 Codex 的打开网页工具打开返回 URL。页面只访问 127.0.0.1；初次打开会显示连接状态。`workspace status` 返回真实连接与可用型号，`workspace stop` 只关闭本项目拥有的服务。有任务或分享运行时先在页面停止。
+
+`workspace_installed` 只说明依赖和静态页面存在；`workspace_ready` 说明本机 Codex 已连接且正常档可用；`ppt_verified` 才证明实际导出成功。这三项不能互相替代。用户无需安装 Node、pnpm 或配置 API key；Codex 账号由本机 Codex 管理。
+
+网页里选“正常”实际使用当前可用最新 Sol，选“低消耗”实际使用最新 Terra，下一件事生效。都用普通速度；不自动升档，也不自动派发子代理。原来 Codex 聊天里的模型仍由该聊天设置决定。
 
 ## 发给用户的 Codex 提示词
 
 ```text
-请在这台 Windows 电脑部署 GuoLuPM/codex-assistant。我已安装 Codex，本机可用的 HTTP 代理是 http://127.0.0.1:7890。
-
-请从 https://github.com/GuoLuPM/codex-assistant/releases/latest 下载 windows-x64.zip 安装附件，核对 Release 正文的 SHA-256，并阅读包内 START-HERE.md。默认工程放 D:\code\assistant，环境放 D:\tools\codex-assistant。不要假设已有 Python、Git 或 GitHub 登录；已有工程和数据先核对，别覆盖。代理只作用于本次下载，未启动时明确告诉我。
-
-按文档安装，并用 Codex 的 load_workspace_dependencies 和本机 Presentations skill 完成 PPT 环境对接。用合成资料跑 check_windows_deployment.py --require-pdf --ppt，实际导出成功后再说已完成；缺什么就继续处理或明确报告，不要猜已装好。公开安装包不含产品数据，有我提供的文件再加入产品池。
-
-本次先用正常档：最新 Sol 主负责，最新 Terra 做必要的有限协助。如果我说“用低消耗档”，就整体降一档：最新 Terra 主负责，最新 Luna 做有限协助。各系列以当前 Codex 可用最新版为准，两档都用普通速度，不用 Astra，不开快速模式。先核对当前聊天模型，需要我在 Codex 切换时直接告诉我；不要只在文字上宣称已切档。两档的数据核验要求相同，低消耗处理不了时说明卡点并建议切正常档，不自动升档。
-
-以后由你从 Codex 帮我入库和查产品，我只在 HTML 里勾选，选好后再生成一份 PPT。需要临时给别人看时，我会点击分享图标；不要替我自动公开产品。沟通尽量口语化，按项目 AGENTS.md 和按需指南执行。
-
-请像我的专属助手一样带我做，一次只讲眼前一步，已经说过的要求别反复问。我不知道怎么用时，先告诉我下一步怎么做，再问我是否想看简短说明；我说“给我看使用手册”时，直接打开工程里的 docs/USER_GUIDE.html。先读 docs/USER_SERVICE.md，能替我做的操作就帮我完成，需要我决定的再用简单的话问我。
+请帮我装好并打开 codex-assistant 工作台。
+从 https://github.com/GuoLuPM/codex-assistant/releases/latest 下载 windows-x64.zip，核对校验值，按包内 START-HERE.md 完成安装。工程放 D:\code\assistant，环境放 D:\tools\codex-assistant；已有文件和数据先检查，别覆盖。不要假设我有 Python、Git 或 GitHub 账号。需要代理时先检查本机 7890 端口，仅本次使用。
+请对接本机已登录的 Codex 和 PPT 组件，用合成资料通过 check_windows_deployment.py --workspace --require-pdf --ppt，再打开工作台。有缺项继续处理，未通过就如实告诉我。
+默认正常档，用最新 Sol、普通速度。以后我在网页里说需求、加资料、勾选商品，直接点“做成图册”下载。其他事情也可以帮我处理；只交付最终文件，不编造数据，不自动公开产品。
+请用简单的话带我做，一次只讲眼前一步。我不会用时帮我；想看说明时打开项目里唯一的使用手册。
 ```

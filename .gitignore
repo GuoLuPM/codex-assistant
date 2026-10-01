@@ -32,3 +32,6 @@ node_modules/
 *.pem
 *.key
 .venv/
+workspace_tool/web/dist/
+workspace_tool/web/test-results/
+workspace_tool/web/playwright-report/

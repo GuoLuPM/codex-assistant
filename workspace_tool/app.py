@@ -1,12 +1,17 @@
 """Authenticated local HTTP/SSE surface; public sharing never serves this app."""
 import asyncio
 import json
+import hashlib
+import base64
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import unquote
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from workspace_tool.tasks import Conflict
+from workspace_tool.runtime import RuntimeError
 
 
 class HttpError(Exception):
@@ -36,10 +41,19 @@ def create_app(service, auth, static_dir):
 
     @asynccontextmanager
     async def lifespan(app):
-        await service.start()
+        async def connect():
+            try:
+                await service.start()
+            except Exception:
+                service.connection_error = "上次的记录暂时无法恢复，请让 Codex 检查工作台。资料仍保留。"
+                import logging
+                logging.getLogger(__name__).exception("Workspace startup failed")
+        connecting = asyncio.create_task(connect())
         try:
             yield
         finally:
+            connecting.cancel()
+            await asyncio.gather(connecting, return_exceptions=True)
             await service.close()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
@@ -62,9 +76,13 @@ def create_app(service, auth, static_dir):
             if path.startswith("/api/") and path != "/api/bootstrap" and not auth.session_valid(request.cookies.get("workspace_session")):
                 return JSONResponse({"error": "请从 Codex 重新打开工作台。", "code": "session_expired"}, status_code=401)
         response = await call_next(request)
+        styles = "'self'"
+        if path == "/help":
+            guide = (Path(__file__).resolve().parents[1] / "docs/USER_GUIDE.html").read_text(encoding="utf-8")
+            styles += " " + " ".join("'sha256-" + base64.b64encode(hashlib.sha256(css.encode()).digest()).decode() + "'" for css in re.findall(r"<style>(.*?)</style>", guide, re.S))
         response.headers.update({
             "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
-            "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'",
+            "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src " + styles + "; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'",
             "Permissions-Policy": "microphone=(), camera=(), geolocation=()",
         })
         return response
@@ -76,6 +94,18 @@ def create_app(service, auth, static_dir):
     @app.exception_handler(ValueError)
     async def value_error(request, exc):
         return JSONResponse({"error": str(exc)}, status_code=409)
+
+    @app.exception_handler(Conflict)
+    async def conflict(request, exc):
+        return JSONResponse({"error": str(exc), "code": "revision_conflict"}, status_code=409)
+
+    @app.exception_handler(RuntimeError)
+    async def runtime_error(request, exc):
+        return JSONResponse({"error": str(exc), "code": exc.code}, status_code=409)
+
+    @app.exception_handler(KeyError)
+    async def missing_field(request, exc):
+        return JSONResponse({"error": "这次操作的信息不完整，请刷新后再试。"}, status_code=400)
 
     @app.post("/api/bootstrap")
     async def bootstrap(request: Request):
@@ -138,11 +168,13 @@ def create_app(service, auth, static_dir):
 
     @app.post("/api/tasks/{tid}/messages")
     async def message(tid: str, request: Request):
-        return await service.message(tid, await json_body(request))
+        result = await service.message(tid, await json_body(request))
+        return {**result, "task_revision": service.store.snapshot(tid)["revision"]}
 
     @app.post("/api/tasks/{tid}/actions")
     async def action(tid: str, request: Request):
-        return await service.action(tid, await json_body(request))
+        result = await service.action(tid, await json_body(request))
+        return {**result, "task_revision": service.store.snapshot(tid)["revision"]}
 
     @app.post("/api/tasks/{tid}/inputs")
     async def upload(tid: str, request: Request):
@@ -156,6 +188,14 @@ def create_app(service, auth, static_dir):
     async def artifact(artifact_id: str, task: str):
         item = service.artifact(task, artifact_id)
         return FileResponse(item["path"], filename=item["display_name"], media_type="application/octet-stream")
+
+    @app.get("/api/tasks/{tid}/shares/{session_id}")
+    async def share(tid: str, session_id: str):
+        return await service.sharing(tid, {"session_id": session_id}, "share_state")
+
+    @app.get("/help")
+    async def help_page():
+        return FileResponse(Path(__file__).resolve().parents[1] / "docs/USER_GUIDE.html")
 
     @app.post("/agent/{tid}")
     async def agent(tid: str, request: Request):

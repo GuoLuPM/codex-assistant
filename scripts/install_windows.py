@@ -84,7 +84,7 @@ def install(bundle, project, runtime, proxy=None, runtime_root=None, skill_dir=N
     # the recipient's saved interpreter or PPT paths with discovery defaults.
     result = configure(project, None if (project / 'environment.local.json').exists() else python, runtime_root, skill_dir)
     result.update(installation=states, tag=manifest['tag'], commit=manifest['commit'], pdf_ready=pdf_ready)
-    result['status'] = 'configured' if result['ppt_ready'] and pdf_ready else 'partial'
+    result['status'] = 'configured' if result['ppt_ready'] and pdf_ready and result['workspace_installed'] else 'partial'
     return result
 
 

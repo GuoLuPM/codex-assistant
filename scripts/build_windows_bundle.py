@@ -41,7 +41,29 @@ def extract(archive, root):
             target.write_bytes(source.read(member))
 
 
-def build(tag, output, cache, proxy=None):
+def build_frontend(application, node, pnpm_js, proxy=None):
+    if not node or not pnpm_js or not Path(node).is_file() or not Path(pnpm_js).is_file():
+        raise ValueError('Building the workspace requires --node and --pnpm-js from the build machine')
+    web = application / 'workspace_tool/web'
+    command = [str(node), str(pnpm_js)]
+    install = command + ['install', '--frozen-lockfile', '--ignore-scripts']
+    if proxy: install += ['--proxy', proxy, '--https-proxy', proxy]
+    subprocess.run(install, cwd=web, check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(command + ['run', 'build'], cwd=web, check=True, stdout=subprocess.DEVNULL)
+    # Include licenses for code shipped in the production browser bundle.
+    licenses = []
+    for name in ('react', 'react-dom', 'scheduler', 'vite'):
+        candidates = list((web / 'node_modules/.pnpm').glob(name + '@*/node_modules/' + name + '/LICENSE*'))
+        if not candidates: raise ValueError('Missing frontend license: ' + name)
+        licenses.append(name + '\n' + candidates[0].read_text(encoding='utf-8'))
+    (web / 'dist/THIRD-PARTY-LICENSES.txt').write_text('\n\n'.join(licenses), encoding='utf-8')
+    # Only the built static page is redistributed; package installation stays on the builder.
+    dependencies = (web / 'node_modules').resolve()
+    if not dependencies.is_relative_to(application.resolve()): raise ValueError('Unsafe build dependency path')
+    shutil.rmtree(dependencies)
+
+
+def build(tag, output, cache, proxy=None, node=None, pnpm_js=None):
     if not tag or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-' for c in tag):
         raise ValueError('Invalid release tag')
     if subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=all'], cwd=ROOT).strip():
@@ -66,6 +88,7 @@ def build(tag, output, cache, proxy=None):
                 target = safe_path(application, entry.filename)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(source.read(entry))
+        build_frontend(application, node, pnpm_js, proxy)
         python_root = root / 'runtime/python'
         extract(download(lock['python'], cache, proxy), python_root)
         share_lock = json.loads((ROOT / 'packaging/share-lock.json').read_text(encoding='utf-8'))
@@ -75,7 +98,7 @@ def build(tag, output, cache, proxy=None):
             shutil.copyfile(download(share_lock[key], cache, proxy), share_root / filename)
         packages = python_root / 'Lib/site-packages'
         packages.mkdir(parents=True)
-        wheels = [download(record, cache, proxy) for record in lock['core']]
+        wheels = [download(record, cache, proxy) for record in lock['core'] + lock.get('workspace', [])]
         pip_wheel = next(p for p in wheels if p.name.startswith('pip-'))
         extract(pip_wheel, packages)
         (python_root / 'python313._pth').write_text('python313.zip\n.\nLib\nLib/site-packages\nimport site\n', encoding='utf-8')
@@ -127,5 +150,7 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--cache', type=Path, required=True)
     parser.add_argument('--proxy')
+    parser.add_argument('--node', type=Path)
+    parser.add_argument('--pnpm-js', type=Path)
     args = parser.parse_args()
-    print(json.dumps(build(args.tag, args.output.resolve(), args.cache.resolve(), args.proxy), ensure_ascii=False))
+    print(json.dumps(build(args.tag, args.output.resolve(), args.cache.resolve(), args.proxy, args.node, args.pnpm_js), ensure_ascii=False))

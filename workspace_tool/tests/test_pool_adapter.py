@@ -65,3 +65,12 @@ class PoolSeamTests(unittest.TestCase):
         two = execute(args, operation_id="lost")
         self.assertEqual(one, two)
         self.assertEqual(self.choices.recent()["total"], 1)
+
+    def test_another_process_cannot_bypass_writer_lease(self):
+        import subprocess
+        from pool_owner import pool_lock
+        with pool_lock(self.root / 'pool'):
+            code = 'import sys;sys.path.insert(0,sys.argv[1]);from pool_owner import pool_lock\nwith pool_lock(sys.argv[2],timeout=.1): print("WRITTEN")'
+            result = subprocess.run([sys.executable, '-c', code, str(Path(__file__).resolve().parents[2] / 'catalog_tool'), str(self.root / 'pool')], capture_output=True, timeout=5)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertNotIn(b'WRITTEN', result.stdout)

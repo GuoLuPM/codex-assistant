@@ -1,0 +1,37 @@
+# workspace · 本机网页助手
+
+用户希望在一个页面里聊天、加资料、挑商品和拿成品时使用。先 `./assistant.ps1 run workspace open`，再用 Codex 的打开网页工具打开返回 URL。URL 带一次性启动凭据，不转发、不保存到公开文档；网页打开后会清除。服务只监听本机，关闭网页不停止正在做的事。
+
+## 接待
+
+用户直接说要办什么。页面只在需要时出现资料、商品、问题和成品。正常档用当前可用最新 Sol；低消耗用最新 Terra，均普通速度；不可用时明确说明，不静默切换。一般无需辅助模型。不要反复解释已显示的信息。
+
+## 产品
+
+`pool` 仍是唯一产品事实与检索能力。先 describe pool，再按其合同 add / inspect / import / retrieve / choose。MCP 调用 `capabilities_call` 的参数：`id="pool"`，`command` 为子命令，`payload.args` 为后面的字符串参数数组。添加资料使用 `payload.input_id`；records、map、plan 直接放 `payload.json` 对应字段，不传磁盘路径。不在任务外另开库，不直接修改数据库。
+
+`choose` 后立刻 `ui_present`，kind 为 products，refs 为 `{session_id}`。浏览器勾选保存后点“做成图册”，直接执行同一验证生成器，不消耗模型回合。不要代选；不要要求用户切回别的聊天说“选好了”。对比用 comparison + 同一 session_id 的 1—4 个 ids，保持相同价格口径。来源字段不可由 caption 覆盖。
+
+## 其他事情与成品
+
+保持 Codex 原生文件与工具能力。通用成品写到本轮开发指令给出的输出目录；只交付一个正式文件。用 `capabilities_call(id="workspace", command="publish", payload={filename}, request_id=唯一操作ID)` 校验文件存在、类型、完整性与任务归属，取得 artifact_id，再 `ui_present(kind="artifact", refs={artifact_id})`。检查文件内容是否满足用户要求仍由 Codex 负责，结构检查不能证明内容正确。
+
+不要把 HTML、脚本、shell 命令或任意路径当作网页动作；ui_present 只接受固定类型与已注册引用。普通回复直接用文字，无需再发相同 text block。原生问题/权限请求由用户在同页回答；模型不得自答批准。
+
+## 新电脑与异常
+
+新电脑先读 [Windows 部署](../docs/WINDOWS_SETUP.md)。需要本机 Codex 已安装登录；优先探测 Codex 提供的实际 CLI 路径，其次已安装的新版本。账号凭据不进入网页。`status` 是连接检查，不等于已实际生成过 PPT；部署必须运行真实图册检查。
+
+`stop` 只关闭本工作台；有活动任务或分享时会明确拒绝，先在页面停止它们。重开恢复任务、文字和选择，未知效果不自动重放。资料/报价变更拒绝旧选择，应重新核对并创建候选。旧成品在生成失败时保留。
+
+网页中的“停止”会中断当前原生回合或正在生成的图册。重启后只根据已提交选择和对应生成任务的验证回执恢复结果，不根据模型口头回复宣布完成。
+
+桌面专属面板/聊天管理工具不继承到独立网页。已连接的通用工具以实际可用为准；不可用时明确说明，不借用其他聊天的私有连接。临时分享仅开放独立只读快照，工作台和 Codex API 不进入公网隧道。
+
+## 开发与验收（按需）
+
+Python 依赖见 `requirements.txt`。前端用 Node 24、pnpm 11.19.0；`pnpm install --frozen-lockfile` 后运行 `test`、`build`、`test:e2e`。浏览器测试只用合成资料和模拟模型；Windows 默认本机 Edge，CI 安装 Playwright Chromium。后台测试：`python -m unittest discover -s workspace_tool/tests -v`。
+
+真实 Codex 检查另用 `scripts/check_workspace_runtime.py` 和 `scripts/evaluate_workspace.py`，会消耗当前账号额度；结果只写私有 data。生成核验用 `scripts/check_windows_deployment.py --workspace --require-pdf --ppt`。正式数据不用于公开测试；不能把模拟模型或连接成功当成全部能力已通过。用原生 usage 计数，未知保持未知；缓存输入不能等同免费，不承诺固定节省比例。
+
+当前文字、图片、固定业务卡片和附件可用；语音朗读未启用。数据输入每份最多 64 MiB，压缩文档展开最多 256 MiB。商品库迁移读部署指南；跨设备不复制 Codex 登录凭据或原生会话。

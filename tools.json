@@ -2,6 +2,13 @@
   "version": 1,
   "tools": [
     {
+      "id": "workspace",
+      "summary": "本机网页助手：聊天、加资料、选产品并获取成品，Codex 驱动，按需提供帮助。",
+      "tags": ["网页", "助手", "工作台", "聊天", "资料", "选品", "帮助", "成品"],
+      "entrypoint": "workspace_tool/cli.py",
+      "guide": "workspace_tool/WORKFLOW.md"
+    },
+    {
       "id": "pool",
       "summary": "持续加入各类文件或单品，按价格、品类、场景检索产品池，找回历史选品，HTML 勾选后生成 PPT。",
       "tags": ["产品池", "数据库", "选品", "场景", "送礼", "价格", "产品", "pdf", "pptx", "xlsx", "html", "历史"],

@@ -2,7 +2,7 @@
 
 供 Codex 调用的本地工具库。用户描述需求，Codex 找到能力、读取必要说明并调用脚本。脚本处理确定性工作，完整业务数据留在本机。
 
-**第一次用：**让 Codex 打开 [大字版使用手册](docs/USER_GUIDE.html)，或直接说“我不会用，带我一步一步来”。手册下载后可直接打开，内容是“给资料 → 说需要 → 勾选后做图册”；Codex 的接待规则见 [接待与帮助](docs/USER_SERVICE.md)。
+**第一次用：**让 Codex 打开 [大字版使用手册](docs/USER_GUIDE.html)，或直接说“我不会用，带我一步一步来”。手册下载后可直接打开，内容是“说需要 → 加资料 → 勾选后点做图册”；Codex 的接待规则见 [接待与帮助](docs/USER_SERVICE.md)。
 
 新 Windows 可直接下载 [Releases 安装包](https://github.com/GuoLuPM/codex-assistant/releases/latest)，包含独立 Python 和基础依赖；[对接文档与转发提示词](docs/WINDOWS_RELEASE.md) 说明如何接通本机 Codex 的 PPT 组件。
 
@@ -13,7 +13,7 @@
 | **正常（默认）** | 最新 Sol | 最新 Terra |
 | **低消耗** | 最新 Terra | 最新 Luna |
 
-可以直接说“用正常档”或“用低消耗档”。各系列都选当前 Codex 可用的最新版，两档均不开快速模式，数据核验标准相同。档位不会自动切换聊天模型，Codex 会在需要时提示你切换；低消耗不承诺固定节省比例。执行细则见 [档位与分工](docs/AGENT_WORKFLOW.md)。
+可以直接说“用正常档”或“用低消耗档”。各系列都选当前 Codex 可用的最新版，两档均不开快速模式，数据核验标准相同。网页右上角可选档，下一件事实际切换；原来 Codex 聊天的模型需在那里设置；低消耗不承诺固定节省比例。执行细则见 [档位与分工](docs/AGENT_WORKFLOW.md)。
 
 ## 开始使用
 
@@ -24,6 +24,8 @@
 ```
 
 当前能力：
+
+- **workspace** — 由 Codex 打开的本机网页：直接聊天、添加资料、挑商品和保存成品。运行 `./assistant.ps1 run workspace open`；读 [工作台流程](workspace_tool/WORKFLOW.md)。
 
 - **pool** — 多格式文件持续加入产品池，内容去重，按价格/品类/推荐场景检索，HTML 勾选后生成 PPT；可生成临时只读链接给别人看。读 [产品池短流程](catalog_tool/POOL_WORKFLOW.md)。
 - **catalog** — 既有 XLSX 坐标映射、增量检索与图册流程。读 [catalog 短流程](catalog_tool/WORKFLOW.md)。

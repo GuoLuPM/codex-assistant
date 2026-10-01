@@ -17,6 +17,7 @@ from pool_owner import pool_lock
 from pool_selection import Selections
 from pool_store import Pool
 from present import invocation
+from workspace_tool.processes import OwnedProcessGroup
 
 ALLOWED = frozenset({"add", "files", "inspect", "render", "observe", "import", "annotate", "enrich", "vocabulary", "source-update", "link", "offer-terms", "derive", "quality", "review-queue", "retrieve", "history", "search", "show", "stats", "facets", "choose", "selection", "sessions", "rename"})
 MUTATING = ALLOWED - {"files", "quality", "review-queue", "history", "search", "show", "stats", "facets", "selection", "sessions", "retrieve"}
@@ -133,13 +134,21 @@ class PoolAdapter:
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
             env={**os.environ, "PYTHONIOENCODING": "utf-8"}, creationflags=subprocess.CREATE_NO_WINDOW)
         try:
+            group = OwnedProcessGroup(process.pid)
+        except OSError:
+            process.terminate(); await process.wait()
+            raise
+        try:
             stdout, stderr = await asyncio.wait_for(process.communicate(), 240)
         except BaseException:
+            group.close()
             if process.returncode is None:
                 process.terminate()
                 await process.wait()
             raise
+        finally:
+            group.close()
         if process.returncode != 0 or not output.is_file():
             raise ValueError("图册还没生成成功，已保留原来的文件。请让 Codex 检查资料或生成环境。")
         # The shared pipeline verifies source/price/image invariants before replacing output.
-        return {"path": str(output), "display_name": output.name, "verification_ref": "pool:" + session_id + ":" + str(revision)}
+        return {"path": str(output), "display_name": output.name, "verification_ref": "pool:" + session_id + ":" + str(revision) + ":job:" + request_id}
