@@ -52,7 +52,7 @@ export function App(){
   async function historyPanel(){setRecent(await api('/api/tasks'));setPanel('history')}
   const connectionMessage=status&&!status.connected?(status.error||'正在连接助手…'):status&&!status.logged_in?'请先在 Codex 中登录，然后重新打开工作台。':'';
   return <main className="app-shell">
-    <header className="topbar"><button className="icon-button" aria-label="最近办的事" onClick={()=>void historyPanel().catch(e=>setNotice(e.message))}><Icon name="menu"/></button><div className="task-title">{state?.blocks.length?state.title:''}</div><button className="icon-button" aria-label="设置和帮助" onClick={()=>setPanel('settings')}><Icon name="more"/></button></header>
+    <header className="topbar"><button className="icon-button" aria-label="最近办的事" onClick={()=>void historyPanel().catch(e=>setNotice(e.message))}><Icon name="menu"/></button><div className="task-title">{state?.blocks.length?state.title:''}</div><button className="settings-button" onClick={()=>setPanel('settings')}><Icon name="settings"/><span>设置和帮助</span></button></header>
     {state?<Conversation state={state} onAction={action}/>:<div className="loading-screen" role="status">{notice?'':'正在打开…'}</div>}
     <footer className="bottom-area">
       {(notice||offline||connectionMessage)&&<p className="connection-note" role="status">{notice||(offline?'连接暂时断开，正在重连…':connectionMessage)}</p>}
