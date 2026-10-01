@@ -63,7 +63,8 @@ class Catalog:
         self.config = config or {}
         self.signature = hashlib.sha256(json.dumps(
             {"import_version": IMPORT_VERSION, "config": self.config}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
-        self.db = sqlite3.connect(self.root / "catalog.sqlite3", timeout=20)
+        from pool_owner import AtomicConnection
+        self.db = sqlite3.connect(self.root / "catalog.sqlite3", timeout=20, factory=AtomicConnection)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA foreign_keys=ON")
         version = self.db.execute("PRAGMA user_version").fetchone()[0]

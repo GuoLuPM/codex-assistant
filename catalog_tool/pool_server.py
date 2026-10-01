@@ -66,6 +66,15 @@ def server_for(pool, session_id, port=0):
             return self.reply(404, {"error": "Unknown selection resource"})
 
         def do_POST(self):
+            # Drain bounded request bodies even on rejected origins. Closing a
+            # Windows TCP socket with unread data can reset it before the 403 is
+            # received. Large/invalid bodies remain rejected without allocation.
+            try:
+                body_length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                body_length = 0
+            self.connection.settimeout(5)
+            body = self.rfile.read(body_length) if 0 < body_length <= 20000 else b""
             origin = f"http://127.0.0.1:{self.server.server_port}"
             route = self.path[len(prefix):] if self.path.startswith(prefix) else ''
             if not self.allowed() or self.headers.get("Origin") != origin or route not in ('selection', 'share/start', 'share/stop'):
@@ -76,7 +85,7 @@ def server_for(pool, session_id, port=0):
                 length = int(self.headers.get("Content-Length", "0"))
                 if not 1 <= length <= 20000:
                     raise ValueError("Invalid request size")
-                data = json.loads(self.rfile.read(length))
+                data = json.loads(body)
                 if route.startswith('share/'):
                     if route == 'share/stop':
                         if data != {}: raise ValueError('Expected empty stop request')

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from catalog_store import resolve_price
 from pool_store import encoded
+from pool_owner import ensure_receipts, selection_write
 
 
 def validate_title(title):
@@ -19,6 +20,9 @@ class Selections:
     def __init__(self, pool):
         self.pool = pool
         self.db = pool.db
+        if getattr(pool, "_selection_schema_ready", False):
+            return
+        ensure_receipts(self.db)
         self.db.executescript("""
           CREATE TABLE IF NOT EXISTS pool_sessions (
             id TEXT PRIMARY KEY, token TEXT NOT NULL, title TEXT NOT NULL,
@@ -32,8 +36,10 @@ class Selections:
         """)
         if 'context_hash' not in {row[1] for row in self.db.execute('PRAGMA table_info(pool_choices)')}:
             self.db.execute('ALTER TABLE pool_choices ADD COLUMN context_hash TEXT')
+        pool._selection_schema_ready = True
 
-    def create(self, ids, price_fields, title="请选择产品"):
+    @selection_write
+    def create(self, ids, price_fields, title="请选择产品", operation_id=None):
         if not ids or len(ids) > 100 or len(ids) != len(set(ids)):
             raise ValueError("Choose 1..100 distinct candidate IDs")
         if not price_fields or len(price_fields) > 2 or len(price_fields) != len(set(price_fields)):
@@ -102,6 +108,7 @@ class Selections:
             raise ValueError("Unknown selection session")
         return dict(row)
 
+    @selection_write
     def rename(self, session_id, title):
         validate_title(title)
         with self.db:
@@ -120,7 +127,8 @@ class Selections:
             result["items"] = [{**json.loads(r["snapshot"]), "selected": bool(r["selected"])} for r in rows]
         return result
 
-    def select(self, session_id, ids, revision):
+    @selection_write
+    def select(self, session_id, ids, revision, operation_id=None):
         if not isinstance(ids, list) or len(ids) > 100 or any(not isinstance(x, str) for x in ids) or len(ids) != len(set(ids)):
             raise ValueError("Invalid selected IDs")
         candidates = {r[0] for r in self.db.execute("SELECT product_id FROM pool_choices WHERE session_id=?", (session_id,))}
@@ -134,9 +142,11 @@ class Selections:
             self.db.executemany("UPDATE pool_choices SET selected=1 WHERE session_id=? AND product_id=?", [(session_id, i) for i in ids])
         return self.state(session_id)
 
-    def seal(self, session_id):
+    @selection_write
+    def seal(self, session_id, operation_id=None):
         with self.db:
-            self.db.execute("BEGIN IMMEDIATE")
+            if not self.db.in_transaction:
+                self.db.execute("BEGIN IMMEDIATE")
             state = self.state(session_id)
             if state["state"] == "closed":
                 raise ValueError("Selection session is closed; create a new selection")
