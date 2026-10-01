@@ -38,7 +38,7 @@ class FilesTests(unittest.IsolatedAsyncioTestCase):
         path = self.root / "outputs" / self.tid / "工作安排.txt"
         path.parent.mkdir(parents=True); path.write_text("周五", encoding="utf-8")
         artifact = publish_artifact(self.store, self.tid, path, self.root / "outputs" / self.tid, "file-checked")
-        self.assertEqual(artifact_file(self.store, self.tid, artifact["artifact_id"])["path"], str(path))
+        self.assertEqual(artifact_file(self.store, self.tid, artifact["artifact_id"])["path"], str(path.resolve()))
         other = self.store.create()["task_id"]
         with self.assertRaises(ValueError): artifact_file(self.store, other, artifact["artifact_id"])
         path.write_text("changed", encoding="utf-8")

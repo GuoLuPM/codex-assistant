@@ -68,8 +68,20 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             choose_model(models[:3], "low")
 
     def test_desktop_install_wins_over_stale_path_cli(self):
-        with patch("workspace_tool.runtime.os.name", "nt"), patch("workspace_tool.runtime.shutil.which", return_value="stale-codex.cmd"), patch("pathlib.Path.is_file", return_value=True):
-            self.assertIn("OpenAI", find_codex())
+        import tempfile
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as directory:
+            desktop = Path(directory) / 'OpenAI/Codex/bin/current/codex.exe'
+            desktop.parent.mkdir(parents=True)
+            desktop.write_text('synthetic desktop executable')
+            stale = Path(directory) / 'stale-codex.cmd'
+            stale.write_text('synthetic old executable')
+            # Replace this module's OS view, not the global os.name used by
+            # pathlib itself (which cannot construct WindowsPath on Linux).
+            environment = SimpleNamespace(name='nt', environ={'LOCALAPPDATA': directory})
+            with patch('workspace_tool.runtime.os', environment), patch('workspace_tool.runtime.shutil.which', return_value=str(stale)):
+                self.assertEqual(find_codex(), str(desktop.resolve()))
+                self.assertEqual(find_codex(str(stale)), str(stale.resolve()))
 
 
 if __name__ == "__main__":
