@@ -54,10 +54,17 @@ def main(argv=None):
     run.add_argument("tool")
     run.add_argument("arguments", nargs=argparse.REMAINDER)
     commands.add_parser("doctor", help="Check the router only; capability dependencies are checked when used")
+    update = commands.add_parser("check-update", help="Compare the local revision with public main using a small metadata request")
+    update.add_argument("--proxy", help="Optional HTTP proxy for this check only")
     args = parser.parse_args(argv)
     try:
         if sys.version_info < (3, 11):
             raise ValueError("Python 3.11+ required")
+        if args.command == "check-update":
+            from scripts.check_update import check
+            result = check(ROOT, proxy=args.proxy)
+            print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+            return {"current": 0, "different": 1, "unknown": 2}[result["status"]]
         tools = registry()
         if args.command == "list":
             if not 1 <= args.limit <= 50 or args.offset < 0 or len(args.query) > 160:

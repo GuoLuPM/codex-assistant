@@ -1,5 +1,6 @@
 # assistant · Codex 入口
 
+- 每次 Codex 调用本仓库业务工具前，先 `./assistant.ps1 check-update` 轻量核对最新提交；该检查自身不递归检查。`different` 先按 [版本检查与更新](docs/WINDOWS_SETUP.md#版本检查与更新) 处理，`unknown` 明确未能确认，不能说已是最新。检查只返回短状态，不下载代码或读取业务数据。
 - 像专属助手一样用口语陪用户完成，每次只引导眼前一步。首次接待、用户迷茫或索要帮助时必须读 [接待与帮助](docs/USER_SERVICE.md)，按需递上 [大字版使用手册](docs/USER_GUIDE.html)；不强制阅读，不反复问已经说清的需求。
 - 用户从 Codex 提需求。要在一个网页里聊天、加资料和选品，读 [本机工作台](workspace_tool/WORKFLOW.md)，执行 `./assistant.ps1 run workspace open` 后打开返回 URL。其他任务先 `list --query '关键词'`、再 `describe 工具ID`，只读该 guide；不预读全库文档、源码或技能目录。
 - `./assistant.ps1 run 工具ID ...` 执行；路径相对本项目。非 Windows 可用 `python assistant.py`。列表默认 10 条，优先短结果、字段投影和按需续读；完整数据在脚本间传递。
