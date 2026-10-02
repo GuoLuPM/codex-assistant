@@ -6,12 +6,20 @@ import json
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class EvaluationExitTests(unittest.TestCase):
+    def test_workspace_isolation_or_model_failure_cannot_exit_successfully(self):
+        from scripts import evaluate_workspace
+        for ok, expected in ((False, 1), (True, 0)):
+            with self.subTest(ok=ok), patch.object(evaluate_workspace, 'evaluate', new=AsyncMock(return_value={'ok': ok})), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                code = evaluate_workspace.main(['--work-dir', 'unused', '--case', 'help'])
+            self.assertEqual(code, expected)
+
     def test_both_evaluators_return_failure_for_errors_or_incomplete_checks(self):
         for name in ("evaluate_pool_models", "evaluate_pool_retrieval"):
             spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / (name + ".py"))

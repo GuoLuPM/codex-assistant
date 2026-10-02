@@ -10,7 +10,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from workspace_tool.runtime import CodexRuntime, RuntimeError, choose_model
+from workspace_tool.runtime import RuntimeError, choose_model
+from scripts.workspace_rehearsal import RehearsalRuntime, rehearsal_directory
 
 
 async def collect(runtime, thread, text, *, inputs=None, interrupt=False):
@@ -47,10 +48,10 @@ async def collect(runtime, thread, text, *, inputs=None, interrupt=False):
 
 
 async def check(args):
-    root = Path(args.work_dir).resolve()
-    root.mkdir(parents=True, exist_ok=True)
-    runtime = CodexRuntime()
-    report = {"schema": 1, "checks": {}, "rehearsals": []}
+    root = rehearsal_directory(args.work_dir)
+    runtime = RehearsalRuntime()
+    report = {"schema": 1, "directory": str(root), "checks": {}, "rehearsals": [],
+              "isolation": "ephemeral_project_tools_only", "durable_resume_tested": False}
     try:
         caps = await runtime.start({"cwd": str(root), **({"codex_bin": args.codex_bin} if args.codex_bin else {})})
         report.update({k: v for k, v in caps.items() if k not in ("models", "request_methods")})
@@ -68,18 +69,14 @@ async def check(args):
         result = await collect(runtime, thread, "送同事。请记住这个信息，只答‘好的’。")
         report["rehearsals"].append(result)
         report["checks"]["multiturn"] = result["status"] == "completed"
-        await runtime.resume_thread(thread)
         result = await collect(runtime, thread, "刚才说要送谁？只回答对象。")
         report["rehearsals"].append(result)
-        report["checks"]["resume"] = result["status"] == "completed" and "同事" in result["text"]
+        report["checks"]["in_memory_context"] = result["status"] == "completed" and "同事" in result["text"]
         result = await collect(runtime, thread, "请写一篇长文章，主题是如何整理产品资料。", interrupt=True)
         report["rehearsals"].append(result)
         report["checks"]["interrupt"] = result["status"] == "interrupted"
-        result = await collect(runtime, thread,
-            "请实际使用工具，在当前目录写一个 UTF-8 文件 工作安排.txt，内容为‘周五给同事准备礼品’。完成后简短告诉我。")
-        report["rehearsals"].append(result)
-        output = root / "工作安排.txt"
-        report["checks"]["file_tool"] = output.is_file() and "周五" in output.read_text(encoding="utf-8-sig")
+        await runtime.verify_history()
+        report["checks"]["not_in_native_history"] = True
         report["access_verified"] = all(report["checks"].values())
         return report
     finally:

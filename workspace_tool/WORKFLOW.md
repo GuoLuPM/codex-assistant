@@ -34,12 +34,16 @@
 
 桌面专属面板/聊天管理工具不继承到独立网页。已连接的通用工具以实际可用为准；不可用时明确说明，不借用其他聊天的私有连接。临时分享仅开放独立只读快照，工作台和 Codex API 不进入公网隧道。
 
+账号和聊天：网页连接运行它的那台电脑上已登录的 Codex，会消耗该账号额度。每项正式任务新建自己的原生会话，后续只恢复这一项；不会接到正在进行的其他聊天。正式会话为了续聊会保留，也可能出现在本机 Codex 列表；若用户自行同步 Codex 会话目录，也可能同步到其其他设备。安装包不含开发者账号、原生会话或产品库。
+
 ## 开发与验收（按需）
 
 Python 依赖见 `requirements.txt`。前端用 Node 24、pnpm 11.19.0；`pnpm install --frozen-lockfile` 后运行 `test`、`build`、`test:e2e`。在本机 Windows 用 Edge 检查页面；浏览器测试只用合成资料和模拟模型，不启动 GitHub 虚拟环境。后台测试：`python -m unittest discover -s workspace_tool/tests -v`。
 
 本机已装好 PPT 环境时，设置 `ASSISTANT_TEST_REAL_EXPORT=1`、`ASSISTANT_TEST_PYTHON=开发环境的python.exe` 再运行 `pnpm test:e2e`：连续 12 次实际生成、下载并核对商品/价格/页数，覆盖乱序勾选、重复请求、超时重试、刷新和停止后保留旧成品；仅模型使用替身。测试结果只存 `data/browser-checks/`。选择是商品 ID 集合，保存回执按候选顺序返回，不能把顺序变化当成勾选仍未保存。
 
-真实 Codex 检查另用 `scripts/check_workspace_runtime.py` 和 `scripts/evaluate_workspace.py`，会消耗当前账号额度；结果只写私有 data。生成核验用 `scripts/check_windows_deployment.py --workspace --require-pdf --ppt`。正式数据不用于公开测试；不能把模拟模型或连接成功当成全部能力已通过。用原生 usage 计数，未知保持未知；缓存输入不能等同免费，不承诺固定节省比例。
+真实 Codex 检查用 `scripts/check_workspace_runtime.py --work-dir data/runtime-check` 或 `scripts/evaluate_workspace.py --work-dir data/workspace-evaluation --case help`，会消耗当前账号额度；每次在指定目录下新建独立现场，不连接日常服务。二者共用 `scripts/workspace_rehearsal.py`：强制原生 ephemeral 临时会话、确认原生返回且无 rollout 路径，每回合核对工具清单，只允许该合成任务的四个 MCP 工具，关闭个人插件、桌面/浏览器、shell、记忆和 hooks；不支持或核对失败立即停止。新增真实模型脚本也必须复用这个入口，不能直接实例化普通 CodexRuntime/Workspace 来跑模型。
+
+验收退出前核对临时会话未进入原生历史，结果只写私有 data。临时会话不支持重启恢复，不能把同进程多轮记忆称作持久恢复验收；通用通知案例只验证文本，不验证 shell 写文件。生成核验另用 `scripts/check_windows_deployment.py --workspace --require-pdf --ppt`。正式数据不用于公开测试；不能把模拟模型或连接成功当成全部能力已通过。用原生 usage 计数，未知保持未知；缓存输入不能等同免费，不承诺固定节省比例。
 
 当前文字、图片、固定业务卡片和附件可用；语音朗读未启用。数据输入每份最多 64 MiB，压缩文档展开最多 256 MiB。商品库迁移读部署指南；跨设备不复制 Codex 登录凭据或原生会话。
