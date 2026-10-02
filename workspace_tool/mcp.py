@@ -28,7 +28,7 @@ def tools_list():
 
 def dispatch(method, params, call):
     if method == "initialize":
-        return {"protocolVersion": params.get("protocolVersion", "2024-11-05"), "capabilities": {"tools": {}}, "serverInfo": {"name": "assistant-workspace", "version": "0.4.0"}}
+        return {"protocolVersion": params.get("protocolVersion", "2024-11-05"), "capabilities": {"tools": {}}, "serverInfo": {"name": "assistant-workspace", "version": "0.4.1"}}
     if method == "ping": return {}
     if method == "tools/list": return {"tools": tools_list()}
     if method != "tools/call" or params.get("name") not in {t["name"] for t in tools_list()}:

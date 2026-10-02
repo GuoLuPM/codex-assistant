@@ -2,7 +2,7 @@
 
 命令前缀 `./assistant.ps1 run pool`（下文省略）。默认库 `data/product-pool/`；测试时在子命令前加 `--index-dir 私有测试目录`，全程用同一目录。自然语言理解只在 Codex，不调用额外模型服务。
 
-在网页工作台中按同一业务合同办事，使用其 MCP 注册的引用和 `ui_present` 展示商品。用户直接点“做成图册”；以下 `open` 和“回聊天说选好了”的步骤只适用于旧独立选择页。工作台接法见 [workspace](../workspace_tool/WORKFLOW.md)。
+在网页工作台中按同一业务合同办事，使用其 MCP 注册的引用和 `ui_present` 展示商品。用户可点“做成图册”，也可在工作台聊天确认后由 Codex 调用 `workspace export`；以下 `open` 和“回聊天说选好了”的步骤只适用于旧独立选择页。工作台接法见 [workspace](../workspace_tool/WORKFLOW.md)。
 
 ## 用户交付文件
 

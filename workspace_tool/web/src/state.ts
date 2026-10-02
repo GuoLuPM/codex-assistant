@@ -2,7 +2,7 @@ export interface Block {block_id:string;kind:string;revision?:number;body:Record
 export interface Snapshot {task_id:string;revision:number;state:string;title:string;blocks:Block[];pending_requests:any[];last_event_seq:number;artifact_ids:string[];model_profile:string;active_turn_id:string|null;error:string|null;thread_id?:string;progress?:{state:string;message:string;job_id:string}}
 export interface UiEvent {task_id:string;seq:number;revision:number;type:string;data:any}
 export interface Product {id:string;name:string;model?:string;variant?:string;prices:{label:string;value:string|number}[];features?:string;image_url?:string;source_file?:string;locator?:string;category?:string;tags?:any[]}
-export interface Selection {session_id:string;revision:number;state:string;title:string;selected_ids:string[];items:Product[];caption?:string;export_state?:string}
+export interface Selection {session_id:string;revision:number;state:string;title:string;selected_ids:string[];items:Product[];caption?:string;export_state?:string;export_job_id?:string}
 export type Action = (kind:string,payload:Record<string,unknown>)=>Promise<any>;
 export function applyEvent(previous:Snapshot,event:UiEvent):Snapshot {
   if(event.task_id!==previous.task_id||event.seq<=previous.last_event_seq)return previous;

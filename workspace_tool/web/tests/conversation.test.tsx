@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Composer } from '../src/components/Composer';
 import { applyEvent, type Snapshot } from '../src/state';
 import { ProductPicker } from '../src/components/ProductPicker';
@@ -43,5 +43,40 @@ describe('quiet, stable interaction',()=>{
     fireEvent.click(screen.getByRole('checkbox'));
     expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(true);
     expect(screen.getByText('已选 1 款')).toBeTruthy();
+  });
+  it('a quickly failed retry releases the export button even when running events are batched',async()=>{
+    const value={session_id:'s',revision:1,state:'sealed',title:'礼品',selected_ids:['p1'],items:[{id:'p1',name:'茶杯',prices:[{label:'零售价',value:88}]}],export_state:'failed',export_job_id:'old-job'};
+    const action=vi.fn(async()=>({job_id:'retry-job',state:'running'}));
+    const {rerender}=render(<ProductPicker taskId="t" value={value} onAction={action}/>);
+    fireEvent.click(screen.getByRole('button',{name:'做成图册'}));
+    await waitFor(()=>expect(action).toHaveBeenCalledWith('export',{session_id:'s',revision:1}));
+    // SSE can deliver running and failed in the same React render. The last
+    // status is still "failed", but it belongs to a different export attempt.
+    rerender(<ProductPicker taskId="t" value={{...value,export_job_id:'retry-job'}} onAction={action}/>);
+    await waitFor(()=>expect(screen.getByRole('button',{name:'做成图册'}).hasAttribute('disabled')).toBe(false));
+  });
+  it('an export started through the conversation shows progress and locks selection',()=>{
+    const value={session_id:'s',revision:1,state:'open',title:'礼品',selected_ids:['p1'],items:[{id:'p1',name:'茶杯',prices:[{label:'零售价',value:88}]}]};
+    const action=vi.fn();
+    const {rerender}=render(<ProductPicker taskId="t" value={value} onAction={action}/>);
+    rerender(<ProductPicker taskId="t" value={{...value,export_state:'running'}} onAction={action}/>);
+    expect(screen.getByRole('checkbox').hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button',{name:'正在做成图册…'}).hasAttribute('disabled')).toBe(true);
+  });
+  it('exports after selecting out of order when the server returns candidate order',async()=>{
+    let saves=0;
+    const action=vi.fn(async(kind:string,payload:Record<string,unknown>)=>{
+      if(kind==='export')return {state:'running',job_id:'ordered'};
+      if(++saves>3)throw new Error('Repeated saving of the same selection');
+      return {selected_ids:['p1','p2'],revision:2};
+    });
+    render(<ProductPicker taskId="t" value={{session_id:'s',revision:1,state:'open',title:'礼品',selected_ids:['p2'],items:[
+      {id:'p1',name:'茶杯',prices:[{label:'零售价',value:88}]},
+      {id:'p2',name:'礼盒',prices:[{label:'零售价',value:68}]},
+    ]}} onAction={action}/>);
+    fireEvent.click(screen.getByRole('checkbox',{name:'选择 茶杯'}));
+    fireEvent.click(screen.getByRole('button',{name:'做成图册'}));
+    await waitFor(()=>expect(action).toHaveBeenCalledWith('export',{session_id:'s',revision:2}));
+    expect(saves).toBe(1);
   });
 });

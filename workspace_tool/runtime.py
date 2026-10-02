@@ -97,7 +97,7 @@ class CodexRuntime:
         self._stderr = asyncio.create_task(self._drain_stderr())
         try:
             initialized = await self.request("initialize", {
-                "clientInfo": {"name": "codex_assistant_workspace", "title": "Assistant", "version": "0.4.0"},
+                "clientInfo": {"name": "codex_assistant_workspace", "title": "Assistant", "version": "0.4.1"},
                 "capabilities": {"experimentalApi": False},
             }, _initial=True)
             await self._send({"method": "initialized"})

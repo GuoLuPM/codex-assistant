@@ -14,6 +14,8 @@
 
 `choose` 后立刻 `ui_present`，kind 为 products，refs 为 `{session_id}`。浏览器勾选保存后点“做成图册”，直接执行同一验证生成器，不消耗模型回合。不要代选；不要要求用户切回别的聊天说“选好了”。对比用 comparison + 同一 session_id 的 1—4 个 ids，保持相同价格口径。来源字段不可由 caption 覆盖。
 
+用户在本工作台聊天里说“选好了，做 PPT”也要接着完成：先 `pool selection --session 会话ID` 读取实际勾选，再 `capabilities_call(id="workspace", command="export", payload={session_id,revision}, request_id=唯一操作ID)`。只能导出该任务已保存的选择，不传或补选商品 ID。响应是生成任务，后台核验后自动展示“保存”；不能把受理当作完成。响应丢失使用同一操作 ID 和相同会话/版本重试。空选择或多个无法确定的会话应明确指出，不猜选品。
+
 ## 其他事情与成品
 
 保持 Codex 原生文件与工具能力。通用成品写到本轮开发指令给出的输出目录；只交付一个正式文件。用 `capabilities_call(id="workspace", command="publish", payload={filename}, request_id=唯一操作ID)` 校验文件存在、类型、完整性与任务归属，取得 artifact_id，再 `ui_present(kind="artifact", refs={artifact_id})`。检查文件内容是否满足用户要求仍由 Codex 负责，结构检查不能证明内容正确。
@@ -35,6 +37,8 @@
 ## 开发与验收（按需）
 
 Python 依赖见 `requirements.txt`。前端用 Node 24、pnpm 11.19.0；`pnpm install --frozen-lockfile` 后运行 `test`、`build`、`test:e2e`。在本机 Windows 用 Edge 检查页面；浏览器测试只用合成资料和模拟模型，不启动 GitHub 虚拟环境。后台测试：`python -m unittest discover -s workspace_tool/tests -v`。
+
+本机已装好 PPT 环境时，设置 `ASSISTANT_TEST_REAL_EXPORT=1`、`ASSISTANT_TEST_PYTHON=开发环境的python.exe` 再运行 `pnpm test:e2e`：连续 12 次实际生成、下载并核对商品/价格/页数，覆盖乱序勾选、重复请求、超时重试、刷新和停止后保留旧成品；仅模型使用替身。测试结果只存 `data/browser-checks/`。选择是商品 ID 集合，保存回执按候选顺序返回，不能把顺序变化当成勾选仍未保存。
 
 真实 Codex 检查另用 `scripts/check_workspace_runtime.py` 和 `scripts/evaluate_workspace.py`，会消耗当前账号额度；结果只写私有 data。生成核验用 `scripts/check_windows_deployment.py --workspace --require-pdf --ppt`。正式数据不用于公开测试；不能把模拟模型或连接成功当成全部能力已通过。用原生 usage 计数，未知保持未知；缓存输入不能等同免费，不承诺固定节省比例。
 

@@ -71,6 +71,73 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             await self.service.agent_call(self.tid, {"name": "approve_everything", "arguments": {}})
 
+    async def test_conversational_export_uses_the_same_scoped_job_and_retry_receipt(self):
+        self.service.store.add_ref(self.tid, 'session', 'chosen-session', {'session_id': 'chosen-session'})
+        calls = []
+        async def renderer(*args):
+            calls.append(args)
+            await asyncio.Future()
+        self.service.pool.export = renderer
+        request = {'name': 'capabilities_call', 'arguments': {'id': 'workspace', 'command': 'export',
+            'payload': {'session_id': 'chosen-session', 'revision': 3}, 'request_id': 'spoken-export'}}
+        try:
+            first = await self.service.agent_call(self.tid, request)
+        except ValueError as error:
+            self.fail('The selected products cannot be exported through the conversation: ' + str(error))
+        repeated = await self.service.agent_call(self.tid, request)
+        await asyncio.sleep(0)
+        self.assertEqual(first['job_id'], repeated['job_id'])
+        self.assertEqual(calls, [(self.tid, 'chosen-session', 3, 'spoken-export')])
+        self.assertEqual(self.service.store.snapshot(self.tid)['progress']['state'], 'running')
+        self.assertEqual(self.runtime.calls, 0)
+        changed = {**request, 'arguments': {**request['arguments'], 'payload': {'session_id': 'chosen-session', 'revision': 4}}}
+        with self.assertRaises(ValueError):
+            await self.service.agent_call(self.tid, changed)
+        self.assertEqual(len(calls), 1)
+
+    async def test_concurrent_export_retries_only_start_one_job(self):
+        self.service.store.add_ref(self.tid, 'session', 's1', {'session_id': 's1'})
+        calls = []
+        async def renderer(*args):
+            calls.append(args)
+            await asyncio.Future()
+        self.service.pool.export = renderer
+        request = {'name': 'capabilities_call', 'arguments': {'id': 'workspace', 'command': 'export',
+            'payload': {'session_id': 's1', 'revision': 1}, 'request_id': 'concurrent-export'}}
+        results = await asyncio.gather(*(self.service.agent_call(self.tid, request) for _ in range(20)))
+        await asyncio.sleep(0)
+        self.assertEqual({r['job_id'] for r in results}, {'job_concurrent-export'})
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(self.service.store.refs(self.tid, 'job')), 1)
+
+    async def test_repeated_fast_failures_are_visible_and_allow_new_attempts(self):
+        self.service.store.add_ref(self.tid, 'session', 's1', {'session_id': 's1'})
+        async def renderer(*args):
+            raise asyncio.TimeoutError()
+        self.service.pool.export = renderer
+        self.service.pool.state = lambda *args: {'session_id': 's1', 'revision': 1, 'state': 'sealed', 'selected_ids': ['p1']}
+        for attempt in range(10):
+            ident = 'failed-' + str(attempt)
+            request = {'name': 'capabilities_call', 'arguments': {'id': 'workspace', 'command': 'export',
+                'payload': {'session_id': 's1', 'revision': 1}, 'request_id': ident}}
+            await self.service.agent_call(self.tid, request)
+            await self.service._jobs[self.tid]
+            progress = self.service.store.snapshot(self.tid)['progress']
+            self.assertEqual(progress['state'], 'failed')
+            self.assertEqual(progress['job_id'], 'job_' + ident)
+            self.assertTrue(progress['message'].strip())
+            with self.assertRaises(ValueError):
+                await self.service.agent_call(self.tid, request)
+
+    async def test_conversational_export_cannot_change_selection_or_use_foreign_session(self):
+        for payload in ({'session_id': 'foreign', 'revision': 0},
+                        {'session_id': 'foreign', 'revision': 0, 'ids': ['invented']},
+                        {'session_id': 'foreign', 'revision': -1}):
+            with self.subTest(payload=payload), self.assertRaises(ValueError):
+                await self.service.agent_call(self.tid, {'name': 'capabilities_call', 'arguments': {
+                    'id': 'workspace', 'command': 'export', 'payload': payload, 'request_id': 'blocked-export'}})
+        self.assertEqual(self.service._jobs, {})
+
     async def test_restarted_native_request_id_is_not_deduplicated_across_turns(self):
         self.service._threads['native-thread'] = self.tid
         for turn in ('turn1', 'turn2'):

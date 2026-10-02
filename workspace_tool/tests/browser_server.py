@@ -44,7 +44,18 @@ async def main():
             try: Selections(db).seal(session_id)
             finally: db.close()
             await asyncio.Future()
-        service.pool.export = interrupted_export
+        if os.environ.get('ASSISTANT_TEST_REAL_EXPORT') == '1':
+            real_export = service.pool.export
+            failures = 2
+            async def initially_failing_export(*args):
+                nonlocal failures
+                if failures:
+                    failures -= 1
+                    raise asyncio.TimeoutError()  # Empty exception must still be visible and retryable.
+                return await real_export(*args)
+            service.pool.export = initially_failing_export
+        else:
+            service.pool.export = interrupted_export
         auth = LocalAuth(host)
         # The fixed bootstrap value exists only in this synthetic test process.
         auth._starts[digest('browser-fixture')] = auth.clock() + 3600

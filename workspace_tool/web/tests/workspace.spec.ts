@@ -1,6 +1,7 @@
 import {test,expect} from '@playwright/test';
 
 test('real page preserves selection, input, layout and local-only actions',async({page})=>{
+  test.skip(process.env.ASSISTANT_TEST_REAL_EXPORT==='1','The real export stress test covers successful rendering separately.');
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
   page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
   await page.goto('/#start=browser-fixture');

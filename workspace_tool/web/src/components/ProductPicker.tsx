@@ -2,7 +2,8 @@ import {memo,useEffect,useRef,useState} from 'react';
 import type {Action,Product,Selection} from '../state';
 import {Icon} from './Icon';
 import {ShareDialog} from './ShareDialog';
-const same=(a:string[],b:string[])=>a.length===b.length&&a.every((x,i)=>x===b[i]);
+// The server returns candidate order; click order does not change a selection.
+const same=(a:string[],b:string[])=>{const ids=new Set(b);return a.length===b.length&&a.every(x=>ids.has(x))};
 const ProductCard=memo(function ProductCard({product,checked,expanded,disabled,toggle,expand}:{product:Product;checked:boolean;expanded:boolean;disabled:boolean;toggle:(id:string)=>void;expand:(id:string)=>void}){
   return <article className={'product-card'+(checked?' selected':'')}>
     <label className="product-choice"><input type="checkbox" checked={checked} disabled={disabled} onChange={()=>toggle(product.id)} aria-label={'选择 '+product.name}/>
@@ -19,7 +20,7 @@ export function ProductPicker({taskId,value,onAction}:{taskId:string;value:Selec
   const [saving,setSaving]=useState(false),[exporting,setExporting]=useState(value.export_state==='running'),[share,setShare]=useState(false),[compare,setCompare]=useState(false);
   const desired=useRef(value.selected_ids),saved=useRef(value.selected_ids),revision=useRef(value.revision),worker=useRef<Promise<void>|null>(null),actions=useRef(onAction);
   actions.current=onAction;
-  useEffect(()=>{if(value.export_state==='completed'||value.export_state==='failed')setExporting(false)},[value.export_state]);
+  useEffect(()=>{if(value.export_state==='running')setExporting(true);else if(value.export_state==='completed'||value.export_state==='failed')setExporting(false)},[value.export_state,value.export_job_id]);
   useEffect(()=>{if(value.revision>=revision.current&&!worker.current){revision.current=value.revision;saved.current=value.selected_ids;desired.current=value.selected_ids;setSelected(value.selected_ids)}},[value.revision,value.selected_ids]);
   async function flush(){
     if(worker.current)return worker.current;
@@ -34,7 +35,7 @@ export function ProductPicker({taskId,value,onAction}:{taskId:string;value:Selec
   }
   const toggle=(id:string)=>{if(exporting)return;const next=desired.current.includes(id)?desired.current.filter(x=>x!==id):[...desired.current,id];desired.current=next;setSelected(next);void flush().catch(()=>{})};
   const expand=(id:string)=>setExpanded(old=>{const next=new Set(old);next.has(id)?next.delete(id):next.add(id);return next});
-  async function exportPpt(){if(exporting)return;setExporting(true);setError('');try{await flush();await onAction('export',{session_id:value.session_id,revision:revision.current})}catch(e){setError((e as Error).message);setExporting(false)}}
+  async function exportPpt(){if(exporting)return;setExporting(true);setError('');try{await flush();const result=await onAction('export',{session_id:value.session_id,revision:revision.current});if(result.state==='completed')setExporting(false)}catch(e){setError((e as Error).message);setExporting(false)}}
   const all=expanded.size===value.items.length;
   return <section className="product-picker" aria-label={value.title}>
     <div className="picker-heading"><h2>{value.title}</h2><button className="icon-button" aria-label="分享商品" onClick={()=>setShare(true)}><Icon name="share"/></button></div>
