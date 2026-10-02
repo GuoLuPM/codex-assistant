@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$ProjectDir = 'D:\code\assistant',
-    [string]$RuntimeDir = 'D:\tools\codex-assistant',
+    [string]$RuntimeDir,
     [string]$Proxy,
     [string]$RuntimeRoot,
     [string]$SkillDir,
@@ -30,7 +30,8 @@ $actualFiles = @(Get-ChildItem -LiteralPath $bundleRoot -Recurse -File -Force | 
 if ($actualFiles.Count -ne @($manifest.files.PSObject.Properties).Count) { throw 'Bundle contains undeclared files.' }
 $env:PYTHONIOENCODING = 'utf-8'
 $env:PYTHONDONTWRITEBYTECODE = '1'
-$installerArgs = @('--bundle', $bundleRoot, '--project-dir', $ProjectDir, '--runtime-dir', $RuntimeDir)
+$installerArgs = @('--bundle', $bundleRoot, '--project-dir', $ProjectDir)
+if ($RuntimeDir) { $installerArgs += @('--runtime-dir', $RuntimeDir) }
 if ($Proxy) { $installerArgs += @('--proxy', $Proxy) }
 if ($RuntimeRoot) { $installerArgs += @('--runtime-root', $RuntimeRoot) }
 if ($SkillDir) { $installerArgs += @('--skill-dir', $SkillDir) }

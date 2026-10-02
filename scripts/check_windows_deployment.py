@@ -67,7 +67,7 @@ def check(ppt=False, require_pdf=False, workspace=False):
         result.update(pool_import=True, duplicate_skip=True, budget_search=True, selection=True)
         if workspace:
             sys.path.insert(0, str(ROOT))
-            from workspace_tool.cli import launch, control
+            from workspace_tool.cli import launch, control, process_alive
             import time
             if not (ROOT / 'workspace_tool/web/dist/index.html').is_file(): raise ValueError('Built workspace page is missing; use the Windows release asset')
             directory = work / 'workspace'
@@ -84,7 +84,9 @@ def check(ppt=False, require_pdf=False, workspace=False):
             finally:
                 control(state, 'stop', method='POST')
                 for _ in range(100):
-                    if not (directory / 'server.local.json').exists(): break
+                    # The registry is removed just before Python exits. On
+                    # Windows its log remains locked until the process is gone.
+                    if not (directory / 'server.local.json').exists() and not process_alive(state['pid']): break
                     time.sleep(.1)
                 else: raise ValueError('Owned workspace has not finished shutting down')
         # Only disposable synthetic state in this exact task directory is removed.

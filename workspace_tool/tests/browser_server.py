@@ -19,7 +19,9 @@ from workspace_tool.pool_adapter import Pool, Selections
 async def main():
     import uvicorn
     from openpyxl import Workbook
-    with tempfile.TemporaryDirectory(prefix='assistant-browser-') as directory:
+    private = ROOT / 'data/browser-checks'
+    private.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='assistant-browser-', dir=private) as directory:
         root = Path(directory); host = '127.0.0.1:' + os.environ.get('ASSISTANT_TEST_PORT', '51937')
         service = Workspace(root, host, project=root, runtime=FakeRuntime())
         book = Workbook(); book.active.append(['名称', '型号', '零售价', '功能特点'])

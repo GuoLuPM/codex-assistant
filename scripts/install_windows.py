@@ -52,12 +52,15 @@ def install_tree(bundle, target, manifest, section):
     return 'installed'
 
 
-def install(bundle, project, runtime, proxy=None, runtime_root=None, skill_dir=None, skip_pdf=False):
+def install(bundle, project, runtime=None, proxy=None, runtime_root=None, skill_dir=None, skip_pdf=False):
     if os.name != 'nt' or platform.machine().lower() not in ('amd64', 'x86_64'):
         raise ValueError('This release supports Windows x64 only')
-    bundle, project, runtime = Path(bundle).resolve(), destination(project), destination(runtime)
-    if project.is_relative_to(runtime) or runtime.is_relative_to(project) or project.is_relative_to(bundle) or runtime.is_relative_to(bundle):
-        raise ValueError('Bundle, project and runtime must be separate directories')
+    bundle, project = Path(bundle).resolve(), destination(project)
+    runtime = destination(runtime if runtime is not None else project / 'data/runtime')
+    if (project.is_relative_to(runtime)
+            or (runtime.is_relative_to(project) and (runtime == project / 'data' or not runtime.is_relative_to(project / 'data')))
+            or any(a.is_relative_to(b) for a, b in ((project, bundle), (bundle, project), (runtime, bundle), (bundle, runtime)))):
+        raise ValueError('Keep the bundle separate; runtime must be below project/data or outside the project')
     if proxy:
         address = urllib.parse.urlsplit(proxy)
         if address.scheme not in ('http', 'https') or not address.hostname or address.username or address.password:
@@ -65,7 +68,9 @@ def install(bundle, project, runtime, proxy=None, runtime_root=None, skill_dir=N
     manifest = verify_bundle(bundle)
     check_destination(project, manifest, 'application')
     check_destination(runtime, manifest, 'runtime')
-    states = {'runtime': install_tree(bundle, runtime, manifest, 'runtime'), 'project': install_tree(bundle, project, manifest, 'application')}
+    # Install code first so a nested runtime cannot make a fresh project appear
+    # to be an unmarked, nonempty installation. Preflight both before writing.
+    states = {'project': install_tree(bundle, project, manifest, 'application'), 'runtime': install_tree(bundle, runtime, manifest, 'runtime')}
     python = runtime / 'python/python.exe'
     environment = {**os.environ, 'PYTHONIOENCODING': 'utf-8', 'PYTHONDONTWRITEBYTECODE': '1'}
     pdf_ready = False
@@ -92,7 +97,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--bundle', type=Path, required=True)
     parser.add_argument('--project-dir', type=Path, default=Path('D:/code/assistant'))
-    parser.add_argument('--runtime-dir', type=Path, default=Path('D:/tools/codex-assistant'))
+    parser.add_argument('--runtime-dir', type=Path, help='Default: <project-dir>/data/runtime')
     parser.add_argument('--proxy')
     parser.add_argument('--runtime-root', type=Path)
     parser.add_argument('--skill-dir', type=Path)

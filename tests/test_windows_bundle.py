@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from windows_bundle import safe_path, verify_bundle
-from install_windows import check_destination, install_tree
+from install_windows import check_destination, install, install_tree
 from configure_windows import configure
 
 
@@ -55,6 +55,44 @@ class BundleTests(unittest.TestCase):
         other = self.root / 'other'; other.mkdir(); (other / 'user.txt').write_text('keep')
         with self.assertRaisesRegex(ValueError, 'marker'): install_tree(self.bundle, other, self.manifest, 'application')
         self.assertEqual((other / 'user.txt').read_text(), 'keep')
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows installer')
+    def test_default_runtime_is_inside_project_and_retries_preserve_private_data(self):
+        project = self.root / 'project space'
+        runtime = project / 'data/runtime'
+        with patch('install_windows.configure', return_value={'ppt_ready': False, 'workspace_installed': False}) as probe:
+            result = install(self.bundle, project, skip_pdf=True)
+            self.assertEqual(result['installation'], {'project': 'installed', 'runtime': 'installed'})
+            self.assertEqual(probe.call_args.args[1], runtime / 'python/python.exe')
+            self.assertEqual((runtime / 'python/python.exe').read_bytes(), b'fake fixture')
+            private = project / 'data/keep.txt'
+            private.write_text('keep', encoding='utf-8')
+            result = install(self.bundle, project, skip_pdf=True)
+            self.assertEqual(result['installation'], {'project': 'reused', 'runtime': 'reused'})
+            self.assertEqual(private.read_text(), 'keep')
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows installer')
+    def test_explicit_external_runtime_remains_supported(self):
+        project, runtime = self.root / 'project', self.root / 'custom runtime'
+        with patch('install_windows.configure', return_value={'ppt_ready': False, 'workspace_installed': False}):
+            result = install(self.bundle, project, runtime, skip_pdf=True)
+        self.assertEqual(result['installation'], {'project': 'installed', 'runtime': 'installed'})
+        self.assertTrue((runtime / 'python/python.exe').is_file())
+        self.assertFalse((project / 'data/runtime').exists())
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows installer')
+    def test_unsafe_runtime_or_existing_user_directory_is_rejected_before_writes(self):
+        project = self.root / 'project'
+        for runtime in (project, project / 'scripts', project / 'data', self.bundle / 'runtime', self.root):
+            with self.subTest(runtime=runtime), self.assertRaises(ValueError):
+                install(self.bundle, project, runtime, skip_pdf=True)
+            self.assertFalse(project.exists())
+        project.mkdir()
+        (project / 'user.txt').write_text('keep', encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, 'marker'):
+            install(self.bundle, project, skip_pdf=True)
+        self.assertEqual([p.name for p in project.iterdir()], ['user.txt'])
+        self.assertEqual((project / 'user.txt').read_text(), 'keep')
 
     def test_configuration_preserves_saved_paths_and_rejects_broken_components(self):
         project = self.bundle / 'application'

@@ -1,6 +1,15 @@
 # Windows 部署与目录迁移
 
-新设备、环境缺失或目录变动时读取。面向 Codex 执行；不需要用户自行掌握命令。项目建议 `D:\code\assistant`，可管理的运行时和缓存放 `D:\tools`。已有 Codex 自带运行时先复用，不强搬应用管理的文件。
+新设备、环境缺失或目录变动时读取。面向 Codex 执行；不需要用户自行掌握命令。已有工程沿用实际位置，新设备默认 `D:\code\assistant`；本项目生成的环境、缓存和测试文件都放在工程内部。已有 Codex 自带运行时先复用，不强搬应用管理的文件。
+
+## 目录约定
+
+- `data/runtime/`：发行包的 Python、分享程序及其下载缓存。改项目目录后，默认环境位置随之改变。
+- `data/worktrees/`：本项目的开发 worktree；搬迁用 `git worktree move`，同步检查本地配置、虚拟环境和 Windows Junction。
+- `data/development/`：开发辅助文件、测试截图和历史检查材料；浏览器集成测试使用 `data/browser-checks/`，正常退出自动清理。
+- `data/install/`：需要保留的安装包和安装材料；临时解压目录在安装验收后清理或收进这里。成品仍放 `outputs/`。
+
+这些目录均不上传 Git。原始用户资料按用户提供的位置读取；Codex 的账号、技能和应用共用运行时由 Codex 管理，不为收拢本项目文件而搬动。旧安装若环境在工程外，先停用、搬迁并核验文件，再用 `configure_windows.py --python 新路径` 更新本机配置；不能直接改名后假定环境可用。
 
 模型提供两档：正常（默认）用最新 Sol 主负责、最新 Terra 有限协助；低消耗整体降一档，用最新 Terra 主负责、最新 Luna 有限协助。都选本机 Codex 可用最新版、普通速度；用户选档时按 [档位与分工](AGENT_WORKFLOW.md) 核对实际聊天模型，不把安装工程当作已经切换模型。
 
@@ -19,14 +28,14 @@
 配置重试保留用户选择的解释器、运行时和技能路径；不会把 Python 链接转换成底层解释器，以免跨出虚拟环境。入口输出固定为 UTF-8，英文 Windows 也能读取中文工具说明。
 
 ```powershell
-# 使用 D 盘已有 Python / venv 的示意路径；先核对文件存在
-$env:ASSISTANT_PYTHON = 'D:\tools\assistant-venv\Scripts\python.exe'
+# 在实际项目目录执行；此例使用已建好的开发 venv
+$env:ASSISTANT_PYTHON = (Resolve-Path '.\data\venv\Scripts\python.exe').Path
 ./assistant.ps1 doctor
 & $env:ASSISTANT_PYTHON -m pip install -r catalog_tool/requirements.txt
 ./assistant.ps1 list
 ```
 
-如需新建虚拟环境，用已核验的 Python 执行 `-m venv D:\tools\assistant-venv`，pip 缓存可通过 `PIP_CACHE_DIR` 指向 D 盘。`doctor` 返回实际 Python 和项目路径，只表示入口可用。pool/catalog 检索需 SQLite FTS5 与 requirements 中的 Python 依赖；多格式读取使用 PyMuPDF、python-pptx、python-docx、xlrd。旧选择页使用标准库 HTTP 服务；新工作台需要 `workspace_tool/requirements.txt` 和已构建的网页，Release 已包含。无需单独数据库。运行测试验证实际依赖。
+如需新建开发虚拟环境，在项目目录用已核验的 Python 执行 `-m venv data/venv`，`PIP_CACHE_DIR` 指向本项目 `data/cache/pip`。发行包环境则直接使用 `data/runtime/python/python.exe`，不要重复建一套。`doctor` 返回实际 Python 和项目路径，只表示入口可用。pool/catalog 检索需 SQLite FTS5 与 requirements 中的 Python 依赖；多格式读取使用 PyMuPDF、python-pptx、python-docx、xlrd。旧选择页使用标准库 HTTP 服务；新工作台需要 `workspace_tool/requirements.txt` 和已构建的网页，Release 已包含。无需单独数据库。运行测试验证实际依赖。
 
 ## PPT 环境
 

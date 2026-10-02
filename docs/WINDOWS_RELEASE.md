@@ -1,6 +1,6 @@
 # 新 Windows 对接：交给 Codex 执行
 
-目标：Windows 10/11 x64，用户已有 Codex；无需预装 Python、Git 或登录 GitHub。默认代码 `D:\code\assistant`，独立 Python 环境 `D:\tools\codex-assistant`。用户只描述需要、提供文件、勾选产品。
+目标：Windows 10/11 x64，用户已有 Codex；无需预装 Python、Git 或登录 GitHub。默认工程 `D:\code\assistant`，Python 环境、缓存和辅助文件放在工程的 `data/` 内；默认环境为 `data/runtime/`。用户只描述需要、提供文件、勾选产品。
 
 验收在本机运行，不依赖 GitHub 虚拟环境。0.4 已在 Windows 11 实机验证安装、网页与实际 PPT；Windows 10 尚未实机验证，新设备仍须执行本文的验收脚本，不能只凭版本名称承诺通过。
 
@@ -37,9 +37,9 @@
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Setup.ps1 -Proxy http://127.0.0.1:7890
 ```
 
-无需代理就省略 `-Proxy`。可用 `-ProjectDir` / `-RuntimeDir` 指定其他**空目录**。没有 D 盘时先说明实际盘符，再选择有空间的位置。`ExecutionPolicy Bypass` 仅用于这一进程，不永久更改执行策略。
+无需代理就省略 `-Proxy`。`-ProjectDir` 可指定其他**空目录**，默认环境自动跟随到该目录的 `data/runtime/`；一般无需 `-RuntimeDir`。旧安装器（如 0.4.0）仍有外置环境默认值，且不支持内嵌环境：由 Codex 先核对安装器能力，不能照搬新路径参数；旧包安装完成后再按部署指南搬入工程并重新验收。没有 D 盘时先说明实际盘符，再选择有空间的位置。`ExecutionPolicy Bypass` 仅用于这一进程，不永久更改执行策略。
 
-安装器验证每个载荷哈希。相同版本重复执行可继续补齐 PDF/PPT 配置；已有数据及保存的本机路径保留，只有显式传入的新路径才替换对应配置。已有配置不可用时报告问题并保留原文件。无安装标记、版本不同或公共代码被修改时停止，不能覆盖旧工程。升级请先核对改动，或安装到新空目录后按迁移文档移动完整私有池。
+安装器验证每个载荷哈希。相同版本重复执行可继续补齐 PDF/PPT 配置；已有数据及保存的本机路径保留，只有显式传入的新路径才替换对应配置。已有配置不可用时报告问题并保留原文件。无安装标记、版本不同或公共代码被修改时停止，不能覆盖旧工程。升级请先核对改动，或安装到新空目录后按迁移文档移动完整私有池。安装验收后，需要保留的 ZIP 和解压材料收进工程 `data/install/`，不要遗留外部测试目录。
 
 ## 2. 对接这台电脑的 Codex PPT 组件
 
@@ -52,7 +52,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Setup.ps1 -Proxy http://12
 3. 用真实路径写本地配置；下面两个变量由工具发现结果赋值：
 
 ```powershell
-$assistantPython = 'D:\tools\codex-assistant\python\python.exe'
+$assistantPython = 'D:\code\assistant\data\runtime\python\python.exe'
 & $assistantPython D:\code\assistant\scripts\configure_windows.py `
   --project-dir D:\code\assistant --python $assistantPython `
   --runtime-root $discoveredRuntimeRoot --skill-dir $discoveredPresentationsSkill
@@ -68,7 +68,7 @@ $assistantPython = 'D:\tools\codex-assistant\python\python.exe'
 Set-Location D:\code\assistant
 .\assistant.ps1 doctor
 .\assistant.ps1 list --query '产品池'
-& D:\tools\codex-assistant\python\python.exe scripts\check_windows_deployment.py --workspace --require-pdf --ppt
+& .\data\runtime\python\python.exe scripts\check_windows_deployment.py --workspace --require-pdf --ppt
 ```
 
 该检查只生成合成商品，验证原价、改名重复入库、预算检索、选择持久化和实际 PPT 管线。合成文件放独立私有目录，成功后清理；失败保留现场并返回路径。不会覆盖用户已有 PPT。`ppt_verified=true` 才能报告实际导出成功。若用户要看效果，另用其真实文件生成选择页，等用户自己勾选。
@@ -95,7 +95,7 @@ Set-Location D:\code\assistant
 
 ```text
 请帮我装好并打开 codex-assistant 工作台。
-从 https://github.com/GuoLuPM/codex-assistant/releases/latest 下载 windows-x64.zip，核对校验值，按包内 START-HERE.md 完成安装。工程放 D:\code\assistant，环境放 D:\tools\codex-assistant；已有文件和数据先检查，别覆盖。不要假设我有 Python、Git 或 GitHub 账号。需要代理时先检查本机 7890 端口，仅本次使用。
+从 https://github.com/GuoLuPM/codex-assistant/releases/latest 下载 windows-x64.zip，核对校验值，按包内 START-HERE.md 完成安装。工程放 D:\code\assistant，环境、缓存和测试文件统一收在这个工程内；旧包若装到外部，安装后搬入 data/runtime 并更新配置、重新验收。已有文件和数据先检查，别覆盖。不要假设我有 Python、Git 或 GitHub 账号。需要代理时先检查本机 7890 端口，仅本次使用。
 请对接本机已登录的 Codex 和 PPT 组件，用合成资料通过 check_windows_deployment.py --workspace --require-pdf --ppt，再打开工作台。有缺项继续处理，未通过就如实告诉我。
 默认正常档，用最新 Sol、普通速度。以后我在网页里说需求、加资料、勾选商品，直接点“做成图册”下载。其他事情也可以帮我处理；只交付最终文件，不编造数据，不自动公开产品。
 请用简单的话带我做，一次只讲眼前一步。我不会用时帮我；想看说明时打开项目里唯一的使用手册。
